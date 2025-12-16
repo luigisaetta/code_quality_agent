@@ -4,6 +4,9 @@ Author: Luigi Saetta
 Date last modified: 2025-12-14
 Python Version: 3.11
 
+License:
+    MIT
+
 Description:
     Read-only, sandboxed filesystem access to a root folder and its subfolders.
     Prevents path traversal and forbids access outside the configured root.

@@ -2,6 +2,9 @@
 Prompt for documentation generation of Python files.
 
 You can customize the documentation style and content by modifying the DOC_PROMPT variable below.
+
+License:
+    MIT
 """
 
 DOC_PROMPT = """

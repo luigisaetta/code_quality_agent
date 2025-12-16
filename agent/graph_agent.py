@@ -4,6 +4,9 @@ Author: Luigi Saetta
 Date last modified: 2025-12-14
 Python Version: 3.11
 
+License:
+    MIT
+
 Description:
     LangGraph agent that runs a pipeline over local Python files (read-only access),
     producing outputs elsewhere.
@@ -91,7 +94,7 @@ def node_check_headers(state: AgentState) -> AgentState:
         logger.info("Checking headers for: %s...", rel)
 
         src = fs.read_text(rel)
-        res = check_header(src)
+        res = check_header(src, path=fs._resolve_under_root(Path(rel)))
         if not res.ok:
             issues[rel] = res.message
 

@@ -4,6 +4,9 @@ Author: Luigi Saetta
 Date last modified: 2025-12-15
 Python Version: 3.11
 
+License:
+    MIT
+
 Description:
     Basic secrets scanning (heuristic). This is not a full secret-scanner replacement.
 """

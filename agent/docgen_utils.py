@@ -1,5 +1,8 @@
 """
 Text generation utilities
+
+License:
+    MIT
 """
 
 import asyncio
