@@ -46,5 +46,3 @@ LLM_MODEL_ID = "openai.gpt-oss-120b"
 TEMPERATURE = 0.0
 TOP_P = 1
 MAX_TOKENS = 4000
-
-

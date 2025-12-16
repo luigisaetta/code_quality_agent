@@ -56,12 +56,23 @@ DICT_KV_STR_RE = re.compile(
 
 PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("AWS Access Key ID", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
-    ("AWS Secret (loose)", re.compile(r"(?i)\baws(.{0,20})?(secret|access)?.{0,20}['\"][A-Za-z0-9/+=]{30,}['\"]")),
+    (
+        "AWS Secret (loose)",
+        re.compile(
+            r"(?i)\baws(.{0,20})?(secret|access)?.{0,20}['\"][A-Za-z0-9/+=]{30,}['\"]"
+        ),
+    ),
     ("OCI OCID (resource id)", re.compile(r"\bocid1\.[a-z0-9._-]+\b", re.IGNORECASE)),
     ("GitHub token", re.compile(r"\bghp_[A-Za-z0-9]{30,}\b")),
     ("GitHub fine-grained token", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b")),
-    ("Private key block", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----")),
-    ("Bearer token header (loose)", re.compile(r"(?i)\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9\-_\.=]{10,}")),
+    (
+        "Private key block",
+        re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----"),
+    ),
+    (
+        "Bearer token header (loose)",
+        re.compile(r"(?i)\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9\-_\.=]{10,}"),
+    ),
 ]
 
 PLACEHOLDER_VALUES = {
@@ -125,7 +136,12 @@ def scan_for_secrets(source: str, *, max_findings: int = 200) -> list[SecretFind
                 matched = m.group(0)
                 redacted = line.replace(matched, _redact_value(matched), 1)
                 findings.append(
-                    SecretFinding(kind=kind, line=i, name_or_key="(pattern)", excerpt=redacted.strip())
+                    SecretFinding(
+                        kind=kind,
+                        line=i,
+                        name_or_key="(pattern)",
+                        excerpt=redacted.strip(),
+                    )
                 )
                 if len(findings) >= max_findings:
                     return findings
@@ -164,4 +180,3 @@ def scan_for_secrets(source: str, *, max_findings: int = 200) -> list[SecretFind
                     return findings
 
     return findings
-

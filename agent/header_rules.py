@@ -23,7 +23,7 @@ REQUIRED_KEYS = [
     "Date last modified:",
     "Python Version:",
     "Description:",
-    "License:"
+    "License:",
 ]
 
 

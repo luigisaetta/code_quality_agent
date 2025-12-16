@@ -54,6 +54,7 @@ MODELS_WITHOUT_KWARGS = {
     "openai.gpt-5",
 }
 
+
 def debug_llm(llm):
     print("LLM class:", type(llm))
     for attr in ("model_name", "model", "openai_api_base", "base_url", "api_base"):
@@ -63,6 +64,7 @@ def debug_llm(llm):
         if hasattr(llm, attr):
             v = getattr(llm, attr)
             print(f"{attr} present =", bool(v))
+
 
 def get_llm(model_id=LLM_MODEL_ID, temperature=TEMPERATURE, max_tokens=MAX_TOKENS):
     """
@@ -97,15 +99,14 @@ def get_llm(model_id=LLM_MODEL_ID, temperature=TEMPERATURE, max_tokens=MAX_TOKEN
             # stream_usage=True,
             temperature=temperature,
             max_tokens=max_tokens,
-            store=False
+            store=False,
             # timeout=None,
             # reasoning_effort="low",
             # max_retries=2,
             # other params...
         )
-        
+
         if DEBUG:
             debug_llm(llm)
-    
 
     return llm

@@ -17,6 +17,8 @@ Usage:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from pathlib import Path
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -28,7 +30,9 @@ from agent.fs_ro import ReadOnlySandboxFS
 from agent.header_rules import check_header
 from agent.secrets_scan import scan_for_secrets
 from agent.docgen import generate_doc_for_file
+from agent.docgen_utils import extract_text, call_llm_normalized
 from agent.oci_models import get_llm
+from agent.docgen_prompt import REPORT_PROMPT
 from agent.utils import get_console_logger
 
 from agent.config import LLM_MODEL_ID
@@ -48,6 +52,7 @@ def get_config_value(
     if not configurable:
         return default
     return configurable.get(key, default)
+
 
 # ---- State ----
 @dataclass
@@ -113,7 +118,9 @@ def node_scan_secrets(state: AgentState) -> AgentState:
     return state
 
 
-async def node_generate_docs(state: AgentState, *, config: RunnableConfig) -> AgentState:
+async def node_generate_docs(
+    state: AgentState, *, config: RunnableConfig
+) -> AgentState:
     fs = ReadOnlySandboxFS(Path(state.root_dir))
 
     # get model_id from config
@@ -135,7 +142,7 @@ async def node_generate_docs(state: AgentState, *, config: RunnableConfig) -> Ag
             source=src,
             out_dir=out_dir,
             # ✅ NEW: now docgen uses the request
-            request=state.request,   
+            request=state.request,
         )
         docs[rel] = str(res.out_path)
 
@@ -143,7 +150,7 @@ async def node_generate_docs(state: AgentState, *, config: RunnableConfig) -> Ag
     return state
 
 
-def node_finalize(state: AgentState) -> AgentState:
+async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentState:
     # A compact summary you can print/store elsewhere
     state.summary = (
         f"Processed {len(state.file_list)} files.\n"
@@ -152,6 +159,33 @@ def node_finalize(state: AgentState) -> AgentState:
         f"Docs generated: {len(state.docs)} files.\n"
         f"Output dir: {state.out_dir}\n"
     )
+
+    # generate a report in markdown format
+    model_id = get_config_value(config, "model_id")
+    llm = get_llm(model_id=model_id)
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    prompt_template = REPORT_PROMPT
+    prompt = prompt_template.format(
+        now_datetime=now_iso,
+        num_files=len(state.file_list),
+        header_issues=state.header_issues,
+        secret_issues=state.secrets,
+    )
+
+    text, model_hint = await call_llm_normalized(llm, prompt)
+
+    logger.info("")
+    logger.info("Final report: %s", text)
+
+    # save to file
+    current_day = now_iso[:10]
+    out_dir = Path(state.out_dir)
+    out_path = out_dir / f"report_{current_day}.md"
+    data = (text.rstrip() + "\n").encode("utf-8")
+    out_path.write_bytes(data)
+
     return state
 
 
@@ -162,7 +196,7 @@ def build_graph():
     g = StateGraph(AgentState)
 
     g.add_node("discover_files", node_discover_files)
-    
+
     # sequentially here we process all the files discovered
     g.add_node("check_headers", node_check_headers)
     g.add_node("scan_secrets", node_scan_secrets)
@@ -182,14 +216,14 @@ def build_graph():
 async def run_agent(graph, *, root_dir: str, out_dir: str, request: str) -> AgentState:
     # here we define the initial state
     state = AgentState(request=request, root_dir=root_dir, out_dir=out_dir)
-    
+
     cfg = {"configurable": {"model_id": LLM_MODEL_ID}}
 
     logger.info("")
     logger.info("Running agent with config: %s...", cfg)
     logger.info("")
-    
+
     # LangGraph returns the final state
     final_state = await graph.ainvoke(state, config=cfg)
-    
+
     return final_state

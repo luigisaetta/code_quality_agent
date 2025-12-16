@@ -111,4 +111,3 @@ def remove_path_from_ref(ref_pathname):
         ref = ref_pathname.split(os.sep)[-1]
 
     return ref
-

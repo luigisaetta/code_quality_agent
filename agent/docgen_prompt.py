@@ -4,7 +4,6 @@ Prompt for documentation generation of Python files.
 You can customize the documentation style and content by modifying the DOC_PROMPT variable below.
 """
 
-
 DOC_PROMPT = """
 You are a senior Python engineer.
 
@@ -37,4 +36,20 @@ PYTHON SOURCE:
 ```python
 {source}
 ```
+"""
+
+# This is the prompt with instructions for the final report
+REPORT_PROMPT = """
+You are a senior Python engineer.
+
+Today is: {now_datetime}.
+
+Generate a final report, in markdown, based on the following inputs:
+
+- Processed: {num_files}
+- Header issues found: {header_issues}
+- Secrets issues found: {secret_issues}
+
+Organize the report in dedicated sections, each one with a proper heading.
+
 """
