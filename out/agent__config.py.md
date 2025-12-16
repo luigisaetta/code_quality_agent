@@ -1,69 +1,67 @@
 # `agent/config.py`
 
 ## Overview
-- Provides a single source of truth for runtime configuration of the LangGraph RAG demo.  
-- Defines boolean flags for debugging and streaming output.  
-- Stores authentication mode, LLM model selection, and generation parameters (temperature, top‑p, max tokens).  
-- Holds OCI (Oracle Cloud Infrastructure) region information and builds the inference service endpoint URL.  
-- Includes a switch to enable the newer LangChain‑OpenAI integration.  
+- Provides a central place for **runtime configuration constants** used by the LangGraph RAG agent.  
+- Defines flags for debugging and streaming output.  
+- Holds OCI (Oracle Cloud Infrastructure) authentication mode, region, and service endpoint construction.  
+- Specifies default LLM settings: model identifier, temperature, top‑p, and max token limit.  
+- Designed to be imported by other modules; no executable code runs on import.
 
 ## Public API
-The module exports only **constants** intended to be imported by other parts of the application:
+The module exports only **constants** (no functions or classes):
 
 | Constant | Description |
 |----------|-------------|
-| `DEBUG` | Global flag to enable verbose debugging output (`True`/`False`). |
-| `STREAMING` | Enables streaming responses from the LLM when `True`. |
-| `AUTH` | Authentication method identifier (e.g., `"API_KEY"`). |
-| `LLM_MODEL_ID` | Identifier of the default Large Language Model to use. |
-| `TEMPERATURE` | Sampling temperature for the LLM (float, `0.0` disables randomness). |
-| `TOP_P` | Nucleus sampling probability (`1` = no top‑p filtering). |
-| `MAX_TOKENS` | Maximum number of tokens to generate per request. |
-| `USE_LANGCHAIN_OPENAI` | Toggle to use the LangChain OpenAI integration (`True`/`False`). |
+| `DEBUG` | Boolean flag to enable verbose debugging output. |
+| `STREAMING` | Boolean flag to enable streaming responses from the LLM. |
+| `AUTH` | Authentication method for OCI (default `"API_KEY"`). |
+| `USE_LANGCHAIN_OPENAI` | Switch to use LangChain’s OpenAI integration (`True`/`False`). |
 | `REGION` | OCI region string (e.g., `"us-chicago-1"`). |
-| `SERVICE_ENDPOINT` | Fully‑qualified inference endpoint URL, derived from `REGION`. |
-
-> **Note:** No functions or classes are defined; the module is purely declarative.
+| `SERVICE_ENDPOINT` | Fully‑qualified inference endpoint built from `REGION`. |
+| `LLM_MODEL_ID` | Identifier of the default language model (e.g., `"openai.gpt-oss-120b"`). |
+| `TEMPERATURE` | Sampling temperature for the LLM (float, default `0.0`). |
+| `TOP_P` | Nucleus sampling probability (float, default `1`). |
+| `MAX_TOKENS` | Maximum token count per request (int, default `4000`). |
 
 ## Key Behaviors and Edge Cases
-- **Dynamic endpoint construction:** `SERVICE_ENDPOINT` is built at import time using an f‑string that incorporates the current value of `REGION`. Changing `REGION` after import will **not** automatically update `SERVICE_ENDPOINT`; a manual recompute or module reload is required.
-- **Authentication placeholder:** `AUTH` is set to `"API_KEY"` as a placeholder. Real deployments must replace this with a secure method (e.g., environment‑sourced API key or OCI IAM token).  
-- **Model selection:** The default `LLM_MODEL_ID` points to an OpenAI‑compatible model (`"openai.gpt-oss-120b"`). Commented alternatives show how to switch to other vendor models.  
-- **Debug/Streaming flags:** Turning `DEBUG` or `STREAMING` on may affect performance or expose sensitive data in logs; they should be used cautiously in production.  
-- **LangChain integration toggle:** When `USE_LANGCHAIN_OPENAI` is `False`, code paths that rely on LangChain's OpenAI wrapper must be avoided or replaced with alternative back‑ends.
+- **Dynamic endpoint**: `SERVICE_ENDPOINT` is constructed with an f‑string; changing `REGION` automatically updates the URL.
+- **Auth mode**: The module only stores the auth type (`"API_KEY"`). Actual credential handling must be performed elsewhere.
+- **Model selection**: Several model IDs are commented out; the active `LLM_MODEL_ID` can be swapped by editing the constant.
+- **Debug/Streaming flags**: Down‑stream code should respect these booleans; they default to `False` for production stability.
+- **Future‑proofing**: The comment `# This module is in development, may change in future versions.` warns that constants may be renamed or expanded.
 
 ## Inputs / Outputs and Side Effects
-- **Inputs:** No runtime inputs; all values are hard‑coded constants.  
-- **Outputs:** The module provides configuration values for import; the only side effect is the creation of `SERVICE_ENDPOINT` during module import.  
-- **Side Effects:** Importing the module evaluates the f‑string for `SERVICE_ENDPOINT`. No I/O, network calls, or mutable state beyond the constants.
+- **Inputs**: None at runtime; all values are hard‑coded constants.
+- **Outputs**: The module makes the constants available to any importer.
+- **Side Effects**: Importing the module has no side effects beyond evaluating the constant definitions.
 
 ## Usage Examples
 ```python
-# Example 1: Basic import and read configuration
+# Example 1: Accessing configuration in another module
 import agent.config as cfg
 
-print("LLM model:", cfg.LLM_MODEL_ID)
-print("Endpoint:", cfg.SERVICE_ENDPOINT)
+if cfg.DEBUG:
+    print("Debug mode is ON")
 
-# Example 2: Enable debugging for a script
-import agent.config as cfg
-cfg.DEBUG = True   # turn on verbose logging for the rest of the process
+print(f"Connecting to OCI endpoint: {cfg.SERVICE_ENDPOINT}")
+print(f"Using model: {cfg.LLM_MODEL_ID}")
 
-# Example 3: Override region and recompute endpoint (requires manual recompute)
-import importlib
-import agent.config as cfg
+# Example 2: Passing config to an LLM client
+from some_llm_lib import LLMClient
 
-cfg.REGION = "eu-frankfurt-1"
-# Re‑evaluate the endpoint after changing REGION
-cfg.SERVICE_ENDPOINT = f"https://inference.generativeai.{cfg.REGION}.oci.oraclecloud.com"
-print(cfg.SERVICE_ENDPOINT)
+client = LLMClient(
+    model_id=cfg.LLM_MODEL_ID,
+    temperature=cfg.TEMPERATURE,
+    max_tokens=cfg.MAX_TOKENS,
+    streaming=cfg.STREAMING,
+)
+
+response = client.generate("Explain the RAG architecture.")
+print(response)
 ```
 
 ## Risks / TODOs
-- **Potential secret exposure:** `AUTH = "API_KEY"` is a placeholder; ensure that real API keys are never hard‑coded. Load them securely from environment variables or secret managers.  
-- **Stale endpoint after region change:** Updating `REGION` does not automatically refresh `SERVICE_ENDPOINT`. Consider converting `SERVICE_ENDPOINT` into a property or function to always reflect the current region.  
-- **Debug flag in production:** Leaving `DEBUG = True` may leak internal state or sensitive data; enforce a safe default for production deployments.  
-- **Future deprecation:** The module header warns that the API may change; downstream code should guard against breaking changes (e.g., by using `getattr` with defaults).  
-
----  
-*Generated by a senior Python engineer, focusing on header analysis and secret scanning.*
+- **Potential secret exposure**: `AUTH = "API_KEY"` is a placeholder that could be replaced with a real API key. Ensure that actual credentials are **never hard‑coded** in source control; load them securely from environment variables or secret managers.
+- **Hard‑coded region/endpoint**: Changing deployment regions requires code changes. Consider externalizing these values to environment variables or a configuration file.
+- **Missing validation**: No runtime checks enforce valid values (e.g., temperature range). Adding simple validation could prevent misconfiguration.
+- **Future changes**: As the module is marked “in development,” downstream code should guard against missing constants or renamed identifiers.

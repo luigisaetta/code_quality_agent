@@ -1,49 +1,54 @@
 # `agent/config_private.py`
 
 ## Overview
-- Defines a **private configuration** module for the `agent` package.  
-- Currently contains a single constant `COMPARTMENT_ID`.  
-- The constant holds an OCI (Oracle Cloud Infrastructure) compartment OCID, used to scope cloud resources.  
-- No functions or classes are defined – the module is intended for import as a simple settings holder.  
+- Holds private configuration values for the agent.
+- Currently defines a single constant `COMPARTMENT_ID`.
+- The constant stores an OCI (Oracle Cloud Infrastructure) compartment OCID.
+- Intended to be imported by other modules that need to reference this compartment.
+- No functions or classes are defined.
 
 ## Public API
 | Name | Type | Description |
 |------|------|-------------|
-| `COMPARTMENT_ID` | `str` | Identifier of the OCI compartment used by the agent. Intended to be imported by other modules that need to reference the compartment. |
+| `COMPARTMENT_ID` | `str` | The OCID of the OCI compartment used by the agent. |
 
 ## Key Behaviors and Edge Cases
-- The module performs **no runtime logic**; importing it simply creates the `COMPARTMENT_ID` variable.  
-- If the constant is missing or altered, any code that relies on it may raise errors when interacting with OCI services.  
-- No validation is performed on the OCID format; callers must assume the value is correct.  
+- The module simply exposes the string constant; there is no runtime logic.
+- If the constant is missing or altered, any code that relies on the correct OCID will fail to locate resources in OCI.
+- No validation is performed on the format of the OCID; callers must assume it is correct.
 
 ## Inputs / Outputs and Side Effects
 | Aspect | Details |
 |--------|---------|
-| **Inputs** | None – the module only defines a constant. |
-| **Outputs** | The constant `COMPARTMENT_ID` is made available to importers. |
+| **Inputs** | None (the module does not accept any parameters). |
+| **Outputs** | Exposes the `COMPARTMENT_ID` string when imported. |
 | **Side Effects** | Importing the module has no side effects (no I/O, network calls, or state changes). |
 
 ## Usage Examples
 ```python
-# Example: using the compartment ID in an OCI client
+# Example: Using the compartment ID in an OCI SDK client
 from oci.identity import IdentityClient
 from agent.config_private import COMPARTMENT_ID
 
-identity = IdentityClient(config={...})   # OCI SDK client
-# List compartments to verify the ID exists
-compartments = identity.list_compartments(compartment_id=COMPARTMENT_ID).data
-print(f"Found {len(compartments)} compartments under {COMPARTMENT_ID}")
+identity = IdentityClient(config={...})  # OCI SDK client configuration
+compartment = identity.get_compartment(compartment_id=COMPARTMENT_ID)
+print(f"Compartment name: {compartment.data.name}")
 ```
 
 ```python
-# Example: passing the ID to another internal module
-from agent.some_module import do_something_with_compartment
+# Example: Passing the compartment ID to a helper function
 from agent.config_private import COMPARTMENT_ID
+from mymodule.resource_manager import list_resources_in_compartment
 
-do_something_with_compartment(compartment_id=COMPARTMENT_ID)
+resources = list_resources_in_compartment(compartment_id=COMPARTMENT_ID)
+for r in resources:
+    print(r.id, r.display_name)
 ```
 
 ## Risks / TODOs
-- **Potential secret exposure**: Although an OCID is not a credential, it is a **resource identifier** that may be considered sensitive in some environments. Ensure this file is excluded from public repositories and is protected by appropriate access controls.  
-- **Hard‑coded value**: If the compartment changes, the code must be updated and redeployed. Consider loading the value from environment variables or a secure secrets manager to improve flexibility.  
-- **Missing validation**: No checks verify that `COMPARTMENT_ID` conforms to the expected OCID pattern; adding a simple validation could catch typographical errors early.
+- **Potential secret exposure**: The file contains a concrete OCI compartment OCID (`COMPARTMENT_ID`). While not a credential, OCIDs can be considered sensitive because they reveal internal cloud resource structure.  
+  - **Recommendation**: Store such identifiers in environment variables or a secure secrets manager and load them at runtime, e.g., `os.getenv("OCI_COMPARTMENT_ID")`.  
+- **Missing validation**: No checks ensure the OCID conforms to the expected pattern. Adding a simple validation function could catch misconfigurations early.  
+- **Documentation**: Add a module‑level docstring describing the purpose of the compartment and any required permissions.  
+
+*No other secrets or credentials were detected in this file.*

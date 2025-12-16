@@ -1,96 +1,66 @@
 # `agent/docgen_prompt.py`
 
 ## Overview
-- Provides a **template string** (`DOC_PROMPT`) used to generate prompts for automatic documentation creation of Python files.  
-- The template embeds placeholders for:
-  - The user’s specific request (`{request}`)  
-  - The relative file path (`{relpath}`)  
-  - The source code to be documented (`{source}`)  
-- Designed to be **customizable**: developers can edit `DOC_PROMPT` to change style, wording, or additional instructions.  
-- Includes a short module‑level docstring explaining its purpose.  
-- No executable code; the module simply exports the constant.
+- Provides two multi‑line string templates (`DOC_PROMPT` and `REPORT_PROMPT`) used to generate prompts for automated documentation creation and final reporting.  
+- The templates embed placeholders (`{request}`, `{relpath}`, `{source}`, `{now_datetime}`, `{num_files}`, `{header_issues}`, `{secret_issues}`) that are intended to be filled in at runtime via `str.format` or f‑strings.  
+- Includes a module‑level docstring describing the purpose of the file and its MIT license.  
+- No executable code; the module only defines constants.  
+- Designed to be imported by other parts of the system that handle prompt construction and LLM interaction.
 
 ## Public API
-```python
-DOC_PROMPT: str
-```
-*`DOC_PROMPT`* – a multi‑line formatted string that can be interpolated with `.format()` (or an f‑string) to produce a ready‑to‑use prompt for a language model.
+| Name | Type | Description |
+|------|------|-------------|
+| `DOC_PROMPT` | `str` | Template for generating a documentation‑generation prompt. It expects the placeholders `{request}`, `{relpath}`, and `{source}` to be substituted with the user request, relative file path, and source code respectively. |
+| `REPORT_PROMPT` | `str` | Template for generating a final markdown report. It expects placeholders `{now_datetime}`, `{num_files}`, `{header_issues}`, and `{secret_issues}` to be filled with the current timestamp and analysis results. |
 
 ## Key Behaviors and Edge Cases
-| Situation | Behaviour |
-|-----------|-----------|
-| **Standard use** – call `DOC_PROMPT.format(request=..., relpath=..., source=...)` | Returns a prompt containing the supplied values, preserving the surrounding markdown and code fences. |
-| **Missing placeholder** – omit one of the required keys | `KeyError` is raised by `str.format`. Caller must ensure all three placeholders are supplied. |
-| **User‑provided content contains backticks or triple‑quotes** | The template already wraps the source code in a fenced code block (```python). Embedded backticks are safe, but stray triple‑quotes could break the outer string if the template is edited; keep the outer triple‑quoted string unchanged. |
-| **Large source files** | The entire source is inserted verbatim; very large files may produce extremely long prompts, potentially exceeding model token limits. Consider truncating or summarising before insertion. |
+- **Placeholder substitution** – The templates rely on `str.format` (or equivalent) to replace placeholders. Missing or misspelled keys will raise a `KeyError`.  
+- **Safety notice** – Both prompts embed a “IMPORTANT SAFETY RULES” block that reminds downstream processing not to expose secrets. The templates themselves do not contain any secrets.  
+- **Multiline formatting** – The raw strings preserve indentation and line breaks, which is important for the LLM to interpret the prompt correctly.  
+- **Unicode handling** – The templates are plain ASCII; they will work with any Unicode content inserted via placeholders.  
+- **Potential injection** – If user‑provided values (e.g., `{request}`) contain formatting braces (`{}`), they must be escaped or passed through a safe templating method to avoid `KeyError` or unintended substitution.
 
-## Inputs / Outputs / Side Effects
-| Component | Type | Description |
-|-----------|------|-------------|
-| `request` | `str` | User‑specific instruction that guides the documentation style or focus. |
-| `relpath` | `str` | Relative path of the file being documented (e.g., `agent/docgen_prompt.py`). |
-| `source` | `str` | Full source code of the target Python file. |
-| **Return** | `str` | A fully‑rendered prompt ready for submission to an LLM. |
-| **Side effects** | None | The module only defines a constant; it does not perform I/O or mutate state. |
+## Inputs / Outputs and Side Effects
+| Component | Input | Output | Side Effects |
+|-----------|-------|--------|--------------|
+| `DOC_PROMPT.format(request, relpath, source)` | `request` (str), `relpath` (str), `source` (str) | Fully‑rendered markdown prompt ready for an LLM | None (pure string operation) |
+| `REPORT_PROMPT.format(now_datetime, num_files, header_issues, secret_issues)` | `now_datetime` (datetime or str), `num_files` (int), `header_issues` (int), `secret_issues` (int) | Final markdown report summarising the analysis | None |
 
 ## Usage Examples
 ```python
-from agent.docgen_prompt import DOC_PROMPT
+from agent.docgen_prompt import DOC_PROMPT, REPORT_PROMPT
+from datetime import datetime
 
-# Example inputs
-user_request = "Emphasize security considerations."
-file_path = "agent/docgen_prompt.py"
-source_code = """def hello():\n    print("Hello, world!")"""
+# Example 1 – Build a documentation generation prompt
+user_request = "Explain the public API and give usage examples."
+rel_path = "my_module/utils.py"
+source_code = """def add(a, b):\n    return a + b"""
 
-# Render the prompt
-prompt = DOC_PROMPT.format(
+doc_prompt = DOC_PROMPT.format(
     request=user_request,
-    relpath=file_path,
+    relpath=rel_path,
     source=source_code,
 )
 
-print(prompt)
-```
+print(doc_prompt)   # Send this string to the LLM
 
-*Result (truncated for brevity):*
-```
-You are a senior Python engineer.
+# Example 2 – Build a final report after processing several files
+now = datetime.utcnow().isoformat()
+final_report = REPORT_PROMPT.format(
+    now_datetime=now,
+    num_files=42,
+    header_issues=0,
+    secret_issues=0,
+)
 
-You must generate documentation for the following Python file.
-The user request below specifies what to emphasize. Follow it carefully when relevant.
-
-IMPORTANT SAFETY RULES:
-- Never include secrets, credentials, API keys, tokens, private keys, or passwords.
-- If the source contains sensitive-looking values, do not reproduce them. Describe them generically.
-
-USER REQUEST (high priority):
-Emphasize security considerations.
-
-Output format:
-- Markdown
-- Title: the file path
-- Sections:
-  - Overview (what it does, in 3-6 bullet points)
-  - Public API (functions/classes likely intended for import/use)
-  - Key behaviors and edge cases
-  - Inputs/outputs and side effects
-  - Usage examples (short, realistic)
-  - Risks/TODOs (brief)
-
-Keep it practical and concise.
-
-FILE PATH: agent/docgen_prompt.py
-
-PYTHON SOURCE:
-```python
-def hello():
-    print("Hello, world!")
-```
+print(final_report)   # Rendered markdown report
 ```
 
 ## Risks / TODOs
-- **Placeholder safety**: Ensure that the values supplied for `{request}`, `{relpath}`, and `{source}` are properly sanitized if they originate from untrusted users, to avoid prompt injection.  
-- **Token limits**: Very large `source` strings may exceed the token budget of downstream LLMs; consider adding logic to truncate or summarize before formatting.  
-- **Maintainability**: If the template is edited, verify that the triple‑quoted outer string remains syntactically correct and that all placeholders are still present.  
+- **Placeholder safety** – Ensure any user‑supplied text is escaped or sanitized before formatting to avoid `KeyError` or accidental injection.  
+- **Missing data handling** – Add defensive code (e.g., `str.format_map(defaultdict(str))`) to gracefully handle absent placeholders.  
+- **Testing** – Include unit tests that verify the templates render correctly with typical and edge‑case inputs.  
+- **Documentation** – Consider exposing a small helper function (e.g., `render_doc_prompt(request, relpath, source)`) to encapsulate formatting and validation.  
 
-No secrets or credentials were detected in the source.
+### Secrets Scan
+No hard‑coded secrets, API keys, tokens, or passwords were found in this file. The only sensitive‑looking content is the generic safety notice, which is intentional and does not expose real credentials.
