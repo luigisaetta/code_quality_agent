@@ -8,7 +8,6 @@ A lightweight **LangGraph-based** agent that scans a local Python codebase (read
 
 It produces artifacts in a separate output folder (no in-place edits).
 
-> **Important:** This project is a demo-quality scanner and doc generator — not a replacement for dedicated secret scanners (e.g., gitleaks) or SAST tools.
 
 ---
 
