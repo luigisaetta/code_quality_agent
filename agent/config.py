@@ -33,8 +33,8 @@ STREAMING = False
 AUTH = "API_KEY"
 
 # (11/12/2025) introduced to support the switch to langchain OpenAI integration
-USE_LANGCHAIN_OPENAI = True
-REGION = "us-chicago-1"
+USE_LANGCHAIN_OPENAI = False
+REGION = "eu-frankfurt-1"
 SERVICE_ENDPOINT = f"https://inference.generativeai.{REGION}.oci.oraclecloud.com"
 
 # LLM

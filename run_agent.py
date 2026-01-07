@@ -1,3 +1,7 @@
+"""
+Entry point to run the agent from command line.
+"""
+
 import argparse
 import asyncio
 from agent.graph_agent import build_graph, run_agent
@@ -5,7 +9,17 @@ from agent.utils import get_console_logger
 
 logger = get_console_logger()
 
+
 def main():
+    """
+    Main function to run the agent from command line.
+    Parses command line arguments and executes the agent graph.
+    """
+    default_request = (
+        "Check headers and scan secrets. If you identify any secrets, "
+        "report them in the risk section."
+    )
+
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--root",
@@ -16,8 +30,9 @@ def main():
         "--out", required=True, help="Output directory for generated artifacts."
     )
     ap.add_argument(
-        "--request", default="Check only headers and scan secrets. If you identify any secrets, report them in the risk section.", 
-        help="User request text."
+        "--request",
+        default=default_request,
+        help="User request text.",
     )
     args = ap.parse_args()
 
@@ -28,7 +43,6 @@ def main():
         st = await run_agent(
             graph, root_dir=args.root, out_dir=args.out, request=args.request
         )
-        
 
         print("")
         print("\n=== AGENT SUMMARY ===")
