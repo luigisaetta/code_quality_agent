@@ -23,7 +23,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from langgraph.graph import StateGraph, END
@@ -33,7 +32,7 @@ from agent.fs_ro import ReadOnlySandboxFS
 from agent.header_rules import check_header
 from agent.secrets_scan import scan_for_secrets
 from agent.docgen import generate_doc_for_file
-from agent.docgen_utils import extract_text, call_llm_normalized
+from agent.docgen_utils import call_llm_normalized
 from agent.oci_models import get_llm
 from agent.docgen_prompt import REPORT_PROMPT
 from agent.utils import get_console_logger
@@ -79,9 +78,20 @@ class AgentState:
 
 
 def node_discover_files(state: AgentState) -> AgentState:
+    """
+    Discover all source files under the root directory.
+
+    Modified to use ReadOnlySandboxFS.
+    """
     fs = ReadOnlySandboxFS(Path(state.root_dir))
-    py_files = fs.list_python_files()
-    state.file_list = [str(fs.relpath(p)) for p in py_files]
+    source_files = fs.list_source_files()
+    state.file_list = [str(fs.relpath(p)) for p in source_files]
+
+    logger.info("")
+    logger.info("Discovered %d source files.", len(state.file_list))
+    logger.info(state.file_list)
+    logger.info("")
+    
     return state
 
 

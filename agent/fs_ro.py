@@ -1,7 +1,7 @@
 """
 File name: fs_ro.py
 Author: Luigi Saetta
-Date last modified: 2025-12-14
+Date last modified: 2026-01-07
 Python Version: 3.11
 
 License:
@@ -16,8 +16,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
+# max file size to read
+MAX_BYTES = 2_000_000
+# for now, only Python files
+FILES_PATTERN = "*.py"
 
 class SandboxViolation(Exception):
     """Raised when attempting to access paths outside the configured sandbox root."""
@@ -41,12 +44,16 @@ class ReadOnlySandboxFS:
             raise SandboxViolation(f"Access outside sandbox is forbidden: {resolved}")
         return resolved
 
-    def list_python_files(self) -> list[Path]:
-        """Return absolute Paths for all .py files under root (recursive)."""
-        return sorted(self.root_dir.rglob("*.py"))
+    def list_source_files(self) -> list[Path]:
+        """
+        Return absolute Paths for all files under root matching pattern (recursive).
+        
+        For now we support only .py files.
+        """
+        return sorted(self.root_dir.rglob(FILES_PATTERN))
 
     def read_text(
-        self, rel_or_abs_path: str | Path, *, max_bytes: int = 2_000_000
+        self, rel_or_abs_path: str | Path, *, max_bytes: int = MAX_BYTES
     ) -> str:
         """Read a file as UTF-8 text (best-effort)."""
         p = self._resolve_under_root(Path(rel_or_abs_path))

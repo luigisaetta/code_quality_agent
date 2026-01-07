@@ -27,14 +27,11 @@ Warnings:
 """
 
 # switched to the new OCI langchain integration
-import httpx
 from langchain_oci import ChatOCIGenAI, ChatOCIOpenAI
-from oci_openai import OciUserPrincipalAuth
 
 from agent.utils import get_console_logger
 from agent.config import (
     DEBUG,
-    USE_LANGCHAIN_OPENAI,
     STREAMING,
     AUTH,
     SERVICE_ENDPOINT,
@@ -79,34 +76,18 @@ def get_llm(model_id=LLM_MODEL_ID, temperature=TEMPERATURE, max_tokens=MAX_TOKEN
         # for some models (OpenAI search) you cannot set those params
         _model_kwargs = None
 
-    if not USE_LANGCHAIN_OPENAI:
-        # old langchain fashion but based on langchain-oci
-        llm = ChatOCIGenAI(
-            auth_type=AUTH,
-            model_id=model_id,
-            service_endpoint=SERVICE_ENDPOINT,
-            compartment_id=COMPARTMENT_ID,
-            is_stream=STREAMING,
-            model_kwargs=_model_kwargs,
-        )
-    else:
-        # based on langchain-openai + oci-openai
-        llm = ChatOCIOpenAI(
-            auth=OciUserPrincipalAuth(),
-            model=model_id,
-            service_endpoint=SERVICE_ENDPOINT,
-            compartment_id=COMPARTMENT_ID,
-            # stream_usage=True,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            store=False,
-            # timeout=None,
-            # reasoning_effort="low",
-            # max_retries=2,
-            # other params...
-        )
+    
+    # old langchain fashion but based on langchain-oci
+    llm = ChatOCIGenAI(
+        auth_type=AUTH,
+        model_id=model_id,
+        service_endpoint=SERVICE_ENDPOINT,
+        compartment_id=COMPARTMENT_ID,
+        is_stream=STREAMING,
+        model_kwargs=_model_kwargs,
+    )
 
-        if DEBUG:
-            debug_llm(llm)
+    if DEBUG:
+        debug_llm(llm)
 
     return llm
