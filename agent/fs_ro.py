@@ -21,6 +21,8 @@ from pathlib import Path
 MAX_BYTES = 2_000_000
 # for now, only Python files
 FILES_PATTERN = "*.py"
+# for listing any file (not only python)
+ALL_FILES_PATTERN = "*"
 
 
 class SandboxViolation(Exception):
@@ -52,6 +54,14 @@ class ReadOnlySandboxFS:
         For now we support only .py files.
         """
         return sorted(self.root_dir.rglob(FILES_PATTERN))
+
+    def list_all_files(self) -> list[Path]:
+        """
+        Return absolute Paths for all files under root (recursive).
+        """
+        return sorted(
+            [p for p in self.root_dir.rglob(ALL_FILES_PATTERN) if p.is_file()]
+        )
 
     def read_text(
         self, rel_or_abs_path: str | Path, *, max_bytes: int = MAX_BYTES

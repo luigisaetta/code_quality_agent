@@ -44,3 +44,15 @@ LLM_MODEL_ID = "openai.gpt-oss-120b"
 TEMPERATURE = 0.0
 TOP_P = 1
 MAX_TOKENS = 4000
+
+# specific configs for the Code Quality Agent
+
+# Accepted license identifiers (you decide the vocabulary)
+# Examples: "MIT", "Apache-2.0", "BSD-3-Clause"
+ACCEPTED_LICENSE_TYPES = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+]
+
+ENABLE_DOC_GENERATION = False
