@@ -76,7 +76,6 @@ def get_llm(model_id=LLM_MODEL_ID, temperature=TEMPERATURE, max_tokens=MAX_TOKEN
         # for some models (OpenAI search) you cannot set those params
         _model_kwargs = None
 
-    
     # old langchain fashion but based on langchain-oci
     llm = ChatOCIGenAI(
         auth_type=AUTH,

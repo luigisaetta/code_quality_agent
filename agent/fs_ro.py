@@ -22,6 +22,7 @@ MAX_BYTES = 2_000_000
 # for now, only Python files
 FILES_PATTERN = "*.py"
 
+
 class SandboxViolation(Exception):
     """Raised when attempting to access paths outside the configured sandbox root."""
 
@@ -47,7 +48,7 @@ class ReadOnlySandboxFS:
     def list_source_files(self) -> list[Path]:
         """
         Return absolute Paths for all files under root matching pattern (recursive).
-        
+
         For now we support only .py files.
         """
         return sorted(self.root_dir.rglob(FILES_PATTERN))

@@ -91,7 +91,7 @@ def node_discover_files(state: AgentState) -> AgentState:
     logger.info("Discovered %d source files.", len(state.file_list))
     logger.info(state.file_list)
     logger.info("")
-    
+
     return state
 
 
@@ -146,18 +146,25 @@ async def node_generate_docs(
 
     for rel in state.file_list:
 
-        logger.info("Generating doc for: %s...", rel)
+        # added this try-except to avoid stopping the whole process if one file fails
+        # one situation where it fails is where the file contains secret info
+        # that the LLM refuses to process
+        try:
+            logger.info("Generating doc for: %s...", rel)
 
-        src = fs.read_text(rel)
-        res = await generate_doc_for_file(
-            llm=llm,
-            relpath=Path(rel),
-            source=src,
-            out_dir=out_dir,
-            # ✅ NEW: now docgen uses the request
-            request=state.request,
-        )
-        docs[rel] = str(res.out_path)
+            src = fs.read_text(rel)
+            res = await generate_doc_for_file(
+                llm=llm,
+                relpath=Path(rel),
+                source=src,
+                out_dir=out_dir,
+                # ✅ NEW: now docgen uses the request
+                request=state.request,
+            )
+            docs[rel] = str(res.out_path)
+        except Exception as e:
+            logger.error("Doc generation failed for %s: %s", rel, e)
+            docs[rel] = ""
 
     state.docs = docs
     return state
@@ -187,7 +194,7 @@ async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentSt
         secret_issues=state.secrets,
     )
 
-    text, model_hint = await call_llm_normalized(llm, prompt)
+    text, _ = await call_llm_normalized(llm, prompt)
 
     logger.info("")
     logger.info("Final report: %s", text)
