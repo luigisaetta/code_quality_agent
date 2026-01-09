@@ -300,9 +300,13 @@ async def node_generate_header_fixes(
                 "detected_type"
             ) or "Unknown"
 
+            src = fs.read_text(rel)
+
             header = await generate_header_snippet(
                 llm=llm,
                 relpath=Path(rel),
+                source=src,
+                author="Unknown",
                 license_hint=detected_license,
                 pyver="3.11",
             )

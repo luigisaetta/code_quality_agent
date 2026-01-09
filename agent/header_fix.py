@@ -12,10 +12,26 @@ import difflib
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from agent.docgen_utils import call_llm_normalized
 from agent.utils import get_console_logger
+from agent.config import PYTHON_VERSION
+
+#
+# This is the template for the Header
+#
+HEADER_TEMPLATE = '''"""
+File name: {file_name}
+Author: {author}
+Date last modified: {date_last_modified}
+Python Version: {python_version}
+License: {license}
+
+Description:
+{description_block}
+"""
+'''
 
 REQUIRED_HEADER_FIELDS = (
     "File name:",
@@ -26,133 +42,155 @@ REQUIRED_HEADER_FIELDS = (
     "Description:",
 )
 
-HEADER_GEN_PROMPT = """
+DESC_GEN_PROMPT = """
 You are a senior Python engineer.
 
-Generate a compliant Python module header as a SINGLE triple-quoted docstring.
+Task: write 1-3 short bullet points describing what this Python module does.
+Return ONLY the bullet points (each starting with "- ").
+Do NOT include secrets or PII. Do NOT quote code. Use generic wording.
 
-CRITICAL REQUIREMENTS:
-- Output MUST be ONLY the docstring. No markdown. No backticks. No explanation.
-- The docstring MUST contain ALL required fields EXACTLY ONCE, with the exact labels:
-  File name:
-  Author:
-  Date last modified:
-  Python Version:
-  License:
-  Description:
-- Values must be on the same line as the label, except Description which can be 1-3 lines.
-- Do NOT include secrets or PII. Use placeholders if unsure.
+Module path: {relpath}
 
-Inputs:
-- file path: {relpath}
-- today's date (YYYY-MM-DD): {today}
-- python version: {pyver}
-- detected project license (if available): {license_hint}
-
-Rules:
-- If license_hint is not "Unknown", set the License field to exactly license_hint.
-- If author is unknown, use "Unknown".
-
-Return ONLY the docstring.
+Module structure:
+- Classes: {classes}
+- Functions: {functions}
+- Imports: {imports}
 """
 
 
 logger = get_console_logger()
 
 
-def _has_all_required_fields(docstring: str) -> bool:
-    return all(field in docstring for field in REQUIRED_HEADER_FIELDS)
+def _format_description_block(lines: list[str]) -> str:
+    """
+    Indent description lines consistently and keep them short.
+    """
+    cleaned = [ln.strip() for ln in lines if ln.strip()]
+    if not cleaned:
+        cleaned = ["- Module description unavailable."]
+
+    # Enforce max 3 lines (your policy)
+    cleaned = cleaned[:3]
+
+    # Enforce bullet formatting
+    bullets = []
+    for ln in cleaned:
+        if not ln.startswith("-"):
+            ln = "- " + ln
+        bullets.append(ln)
+
+    # 4-space indentation for block
+    return "\n".join("    " + b for b in bullets)
 
 
-def _normalize_docstring(text: str) -> str:
-    t = text.strip()
-
-    # Strip markdown fences robustly
-    if t.startswith("```"):
-        lines = t.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        t = "\n".join(lines).strip()
-
-    # Ensure triple-quoted docstring
-    if not (t.startswith('"""') and t.endswith('"""')):
-        inner = t.strip().strip('"').strip()
-        t = '"""\n' + inner + '\n"""'
-
-    # Normalize first/last lines ONLY (avoid corrupting body)
-    lines = t.splitlines()
-    if lines and lines[0].startswith('"""'):
-        lines[0] = '"""'
-    if lines and lines[-1].endswith('"""'):
-        lines[-1] = '"""'
-    t = "\n".join(lines)
-
-    # Ensure it starts/ends exactly like a docstring block
-    if not t.startswith('"""\n'):
-        t = '"""\n' + t[3:].lstrip()
-    if not t.endswith('\n"""'):
-        t = t[:-3].rstrip() + '\n"""'
-
-    return t.strip() + "\n"
-
-
-def _fallback_header(relpath: Path, pyver: str, today: str, license_hint: str) -> str:
+def _render_header(
+    *,
+    relpath: Path,
+    author: str,
+    today: str,
+    pyver: str,
+    license_hint: str,
+    description_lines: list[str],
+) -> str:
     lic = license_hint if license_hint and license_hint != "Unknown" else "Unknown"
     return (
-        '"""\n'
-        f"File name: {relpath.name}\n"
-        "Author: Unknown\n"
-        f"Date last modified: {today}\n"
-        f"Python Version: {pyver}\n"
-        f"License: {lic}\n"
-        "Description:\n"
-        "- Module description unavailable (auto-generated header).\n"
-        '"""\n'
+        HEADER_TEMPLATE.format(
+            file_name=relpath.name,
+            author=author or "Unknown",
+            date_last_modified=today,
+            python_version=pyver,
+            license=lic,
+            description_block=_format_description_block(description_lines),
+        ).strip()
+        + "\n"
     )
+
+
+def _extract_structure(source: str) -> dict[str, list[str]]:
+    try:
+        mod = ast.parse(source)
+    except SyntaxError:
+        return {"classes": [], "functions": [], "imports": []}
+
+    classes = [n.name for n in mod.body if isinstance(n, ast.ClassDef)]
+    funcs = [n.name for n in mod.body if isinstance(n, ast.FunctionDef)]
+
+    imports: list[str] = []
+    for n in mod.body:
+        if isinstance(n, ast.Import):
+            imports.extend(a.name for a in n.names)
+        elif isinstance(n, ast.ImportFrom):
+            if n.module:
+                imports.append(n.module)
+
+    # keep it short
+    return {
+        "classes": classes[:10],
+        "functions": funcs[:10],
+        "imports": imports[:10],
+    }
 
 
 async def generate_header_snippet(
     *,
     llm: Any,
     relpath: Path,
+    source: str,
+    author: str = "Unknown",
     license_hint: str = "Unknown",
-    pyver: str = "3.11",
+    pyver: str = PYTHON_VERSION,
 ) -> str:
     """
     Returns ONLY the header docstring text (with trailing newline).
     """
-    prompt = HEADER_GEN_PROMPT.format(
-        relpath=str(relpath).replace("\\", "/"),
-        today=date.today().isoformat(),
+    today = date.today().isoformat()
+
+    # Default description (deterministic) if LLM fails
+    struct = _extract_structure(source)
+    fallback_desc = []
+
+    if struct["classes"]:
+        fallback_desc.append(f"Defines classes: {', '.join(struct['classes'][:5])}.")
+    if struct["functions"]:
+        fallback_desc.append(
+            f"Defines functions: {', '.join(struct['functions'][:5])}."
+        )
+    if not fallback_desc:
+        fallback_desc.append("Provides supporting utilities for this project.")
+
+    # LLM-generated description (optional, safer: only structure is sent)
+    description_lines: list[str] = fallback_desc
+
+    try:
+        prompt = DESC_GEN_PROMPT.format(
+            relpath=str(relpath).replace("\\", "/"),
+            classes=", ".join(struct["classes"]) or "None",
+            functions=", ".join(struct["functions"]) or "None",
+            imports=", ".join(struct["imports"]) or "None",
+        )
+        text, _ = await call_llm_normalized(llm, prompt)
+
+        # Parse bullet lines
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        # Keep only bullets / normalize
+        bullets = []
+        for ln in lines:
+            if not ln.startswith("-"):
+                ln = "- " + ln.lstrip("- ").strip()
+            bullets.append(ln)
+
+        if bullets:
+            description_lines = bullets[:3]
+
+    except Exception as e:
+        logger.warning("LLM description generation failed for %s: %s", relpath, e)
+
+    # Render header using the fixed template
+    return _render_header(
+        relpath=relpath,
+        author=author or "Unknown",
+        today=today,
         pyver=pyver,
         license_hint=license_hint or "Unknown",
+        description_lines=description_lines,
     )
-
-    header: str | None = None
-
-    for _attempt in range(3):
-        text, _ = await call_llm_normalized(llm, prompt)
-        candidate = _normalize_docstring(text)
-        if _has_all_required_fields(candidate):
-            header = candidate
-            break
-
-        # tighten prompt for retry
-        prompt = HEADER_GEN_PROMPT.format(
-            relpath=str(relpath).replace("\\", "/"),
-            today=date.today().isoformat(),
-            pyver=pyver,
-            license_hint=license_hint or "Unknown",
-        )
-
-    if header is None:
-        header = _fallback_header(
-            relpath,
-            pyver=pyver,
-            today=date.today().isoformat(),
-            license_hint=license_hint or "Unknown",
-        )
-
-    return header

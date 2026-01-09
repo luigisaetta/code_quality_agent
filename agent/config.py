@@ -54,3 +54,6 @@ ACCEPTED_LICENSE_TYPES = [
 # set this flag to TRue if you want to create local docs in md format.
 # Not needed to check code quality.
 ENABLE_DOC_GENERATION = False
+
+# used fopr header generation. It is the minimum ìversion accepted.
+PYTHON_VERSION = "3.11"
