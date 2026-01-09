@@ -52,7 +52,8 @@ For each Python file, the agent can generate Markdown documentation with section
 - usage examples
 - risks/TODOs
 
-A final summary report is also generated in Markdown.
+### Report generation
+A final summary report is also generated, in Markdown.
 
 ---
 
