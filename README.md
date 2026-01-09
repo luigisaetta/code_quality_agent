@@ -35,6 +35,14 @@ Findings are reported with:
 - line number
 - a redacted excerpt
 
+### License check
+Check that an approved LICENSE file is provided.
+
+### Header fix generation
+For each of the files where the header check fails, provide the snippet suggested to use.
+- modifiy the Author field
+- check the rest.
+
 ### Per-file doc generation (LLM)
 For each Python file, the agent can generate Markdown documentation with sections such as:
 - overview
