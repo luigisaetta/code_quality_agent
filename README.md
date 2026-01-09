@@ -68,3 +68,15 @@ A final summary report is also generated in Markdown.
 ├── requirements.txt
 └── LICENSE
 ```
+
+## Setup
+1. Create a python 3.11+ environment
+
+2. Install the following python libraries
+```
+pip install oci -U
+pip install langchain -U
+pip install langchain-oci -U
+pip install langgraph -U
+```
+
