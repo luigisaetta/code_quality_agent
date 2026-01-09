@@ -37,6 +37,7 @@ from agent.oci_models import get_llm
 from agent.docgen_prompt import REPORT_PROMPT
 from agent.license_check import check_license
 from agent.pii_scan import scan_for_pii
+from agent.header_fix import generate_header_snippet
 from agent.config import ACCEPTED_LICENSE_TYPES
 
 from agent.utils import get_console_logger
@@ -89,6 +90,8 @@ class AgentState:
     pii_warnings: dict[str, list[dict[str, Any]]] = field(
         default_factory=dict
     )  # subset severity=warn
+
+    header_fixes: dict[str, str] = field(default_factory=dict)  # relpath -> header snippet file path
 
 
 # ---- Nodes ----
@@ -266,6 +269,53 @@ def node_check_license(state: AgentState) -> AgentState:
 
     return state
 
+async def node_generate_header_fixes(
+    state: AgentState, *, config: RunnableConfig
+) -> AgentState:
+    if not state.header_issues:
+        return state
+
+    fs = ReadOnlySandboxFS(Path(state.root_dir))
+
+    model_id = get_config_value(config, "model_id")
+    llm = get_llm(model_id=model_id)
+
+    out_dir = Path(state.out_dir).expanduser().resolve()
+    fixes_dir = out_dir / "header_fixes"
+    fixes_dir.mkdir(parents=True, exist_ok=True)
+
+    fixes: dict[str, str] = {}
+
+    for rel in state.header_issues.keys():
+        logger.info("Generating header snippet for: %s...", rel)
+
+        try:
+            detected_license = (getattr(state, "license_info", {}) or {}).get("detected_type") or "Unknown"
+
+            header = await generate_header_snippet(
+                llm=llm,
+                relpath=Path(rel),
+                license_hint=detected_license,
+                pyver="3.11",
+            )
+
+            # Create a mirrored directory structure under header_fixes
+            target = fixes_dir / (Path(rel).as_posix() + ".header.py")
+            target.parent.mkdir(parents=True, exist_ok=True)
+
+            # File contains ONLY the header docstring
+            target.write_text(header, encoding="utf-8")
+
+            fixes[rel] = str(target)
+
+        except Exception as e:
+            logger.error("Header snippet generation failed for %s: %s", rel, e)
+            fixes[rel] = ""
+
+    state.header_fixes = fixes
+    return state
+
+
 
 async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentState:
     # A compact summary you can print/store elsewhere
@@ -329,12 +379,14 @@ def build_graph():
     g.add_node("generate_docs", node_generate_docs)
     g.add_node("check_license", node_check_license)
     g.add_node("scan_pii", node_scan_pii)
+    g.add_node("generate_header_fixes", node_generate_header_fixes)
     g.add_node("finalize", node_finalize)
 
     g.set_entry_point("discover_files")
     g.add_edge("discover_files", "check_license")
     g.add_edge("check_license", "check_headers")
-    g.add_edge("check_headers", "scan_secrets")
+    g.add_edge("check_headers", "generate_header_fixes")
+    g.add_edge("generate_header_fixes", "scan_secrets")
     g.add_edge("scan_secrets", "scan_pii")
     g.add_edge("scan_pii", "generate_docs")
     g.add_edge("generate_docs", "finalize")

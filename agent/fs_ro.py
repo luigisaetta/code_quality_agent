@@ -19,6 +19,7 @@ from pathlib import Path
 
 # max file size to read
 MAX_BYTES = 2_000_000
+
 # for now, only Python files
 FILES_PATTERN = "*.py"
 # for listing any file (not only python)
