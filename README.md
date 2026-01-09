@@ -77,6 +77,11 @@ For example,
 conda create -n code_quality_agent python==3.11
 ```
 
+activate the environment. If you're using conda:
+```
+conda activate code_quality_agent
+```
+
 2. Install the following python libraries
 ```
 pip install oci -U
@@ -94,8 +99,10 @@ Put in the file your compartment's OCID.
 4. Have your local OCI config setup
 
 Setup under $HOME/.oci
-
+See: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm
 
 5. Set policies to use Generative AI
+
+See: https://docs.oracle.com/en-us/iaas/Content/generative-ai/iam-policies.htm
 
 Ask your tenancy admin for help.
