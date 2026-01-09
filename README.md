@@ -72,6 +72,11 @@ A final summary report is also generated in Markdown.
 ## Setup
 1. Create a python 3.11+ environment
 
+For example, 
+```
+conda create -n code_quality_agent python==3.11
+```
+
 2. Install the following python libraries
 ```
 pip install oci -U
@@ -83,10 +88,14 @@ pip install langgraph -U
 3. Create a config_private.py file
 
 Start from the template provided in the repository and create a **config_private.py** file.
-Put in the file your compartment's OCID
+Put in the file your compartment's OCID.
+
 
 4. Have your local OCI config setup
 
+Setup under $HOME/.oci
+
+
 5. Set policies to use Generative AI
 
-Ask your admin for help.
+Ask your tenancy admin for help.
