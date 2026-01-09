@@ -127,7 +127,9 @@ async def generate_header_snippet(
         relpath=str(relpath).replace("\\", "/"),
         today=date.today().isoformat(),
         pyver=pyver,
+        license_hint=license_hint or "Unknown",
     )
+
 
     header: str | None = None
 

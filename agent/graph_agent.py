@@ -292,6 +292,8 @@ async def node_generate_header_fixes(
         try:
             detected_license = (getattr(state, "license_info", {}) or {}).get("detected_type") or "Unknown"
 
+            logger.info("Using detected license type: %s", detected_license)
+            
             header = await generate_header_snippet(
                 llm=llm,
                 relpath=Path(rel),
@@ -376,10 +378,10 @@ def build_graph():
     # sequentially here we process all the files discovered
     g.add_node("check_headers", node_check_headers)
     g.add_node("scan_secrets", node_scan_secrets)
-    g.add_node("generate_docs", node_generate_docs)
     g.add_node("check_license", node_check_license)
     g.add_node("scan_pii", node_scan_pii)
     g.add_node("generate_header_fixes", node_generate_header_fixes)
+    g.add_node("generate_docs", node_generate_docs)
     g.add_node("finalize", node_finalize)
 
     g.set_entry_point("discover_files")
