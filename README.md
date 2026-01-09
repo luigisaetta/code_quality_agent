@@ -14,7 +14,7 @@ It produces artifacts in a separate output folder (no in-place edits).
 ## Features
 
 ### Header policy checks
-For each discovered `.py` file, the agent validates that a header block contains:
+For each discovered source file, the agent validates that a header block contains:
 
 - `File name:`
 - `Author:`
@@ -54,6 +54,10 @@ For each Python file, the agent can generate Markdown documentation with section
 
 ### Report generation
 A final summary report is also generated, in Markdown.
+
+### Languages supported
+For now, tests have been done using:
+- Python
 
 ---
 
