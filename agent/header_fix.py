@@ -59,6 +59,7 @@ Return ONLY the docstring.
 
 logger = get_console_logger()
 
+
 def _has_all_required_fields(docstring: str) -> bool:
     return all(field in docstring for field in REQUIRED_HEADER_FIELDS)
 
@@ -112,7 +113,6 @@ def _fallback_header(relpath: Path, pyver: str, today: str, license_hint: str) -
     )
 
 
-
 async def generate_header_snippet(
     *,
     llm: Any,
@@ -129,7 +129,6 @@ async def generate_header_snippet(
         pyver=pyver,
         license_hint=license_hint or "Unknown",
     )
-
 
     header: str | None = None
 

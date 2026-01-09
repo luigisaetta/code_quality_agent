@@ -91,7 +91,9 @@ class AgentState:
         default_factory=dict
     )  # subset severity=warn
 
-    header_fixes: dict[str, str] = field(default_factory=dict)  # relpath -> header snippet file path
+    header_fixes: dict[str, str] = field(
+        default_factory=dict
+    )  # relpath -> header snippet file path
 
 
 # ---- Nodes ----
@@ -109,7 +111,10 @@ def node_discover_files(state: AgentState) -> AgentState:
 
     logger.info("")
     logger.info("Discovered %d source files.", len(state.file_list))
-    logger.info(state.file_list)
+
+    for f_name in state.file_list:
+        logger.info(" - %s", f_name)
+
     logger.info("")
 
     return state
@@ -269,6 +274,7 @@ def node_check_license(state: AgentState) -> AgentState:
 
     return state
 
+
 async def node_generate_header_fixes(
     state: AgentState, *, config: RunnableConfig
 ) -> AgentState:
@@ -290,10 +296,10 @@ async def node_generate_header_fixes(
         logger.info("Generating header snippet for: %s...", rel)
 
         try:
-            detected_license = (getattr(state, "license_info", {}) or {}).get("detected_type") or "Unknown"
+            detected_license = (getattr(state, "license_info", {}) or {}).get(
+                "detected_type"
+            ) or "Unknown"
 
-            logger.info("Using detected license type: %s", detected_license)
-            
             header = await generate_header_snippet(
                 llm=llm,
                 relpath=Path(rel),
@@ -318,7 +324,6 @@ async def node_generate_header_fixes(
     return state
 
 
-
 async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentState:
     # A compact summary you can print/store elsewhere
     hard_pii = sum(len(v) for v in state.pii_failures.values())
@@ -339,7 +344,7 @@ async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentSt
     model_id = get_config_value(config, "model_id")
     llm = get_llm(model_id=model_id)
 
-    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="minutes")
 
     prompt_template = REPORT_PROMPT
     prompt = prompt_template.format(
