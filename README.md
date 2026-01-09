@@ -1,10 +1,12 @@
 # Code Quality Agent
 
-A lightweight **LangGraph-based** agent that scans a local Python codebase (read-only) to:
+A lightweight **LangGraph-based** agent that scans a local codebase (read-only) to:
 
 - ✅ **Check file headers** against a simple template policy
 - ✅ **Scan for secrets** (heuristic patterns + suspicious assignments)
-- ✅ **Generate per-file documentation** in Markdown via an LLM (OCI GenAI / OCI OpenAI via LangChain)
+- ✅ **Check for license**
+- ✅ **Generate header fixes**
+- ✅ **Generate per-file documentation** (optional) in Markdown via an LLM (OCI GenAI / OCI OpenAI via LangChain)
 
 It produces artifacts in a separate output folder (no in-place edits).
 
