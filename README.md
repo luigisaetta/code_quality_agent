@@ -6,7 +6,7 @@ A lightweight **LangGraph-based** agent that scans a local codebase (read-only) 
 - ✅ **Scan for secrets** (heuristic patterns + suspicious assignments)
 - ✅ **Check for license**
 - ✅ **Generate header fixes**
-- ✅ **Generate per-file documentation** (optional) in Markdown via an LLM (OCI GenAI / OCI OpenAI via LangChain)
+- ✅ **Generate per-file documentation** (optional) in Markdown via an LLM (OCI GenAI via LangChain)
 
 It produces artifacts in a separate output folder (no in-place edits).
 
