@@ -59,6 +59,7 @@ Generate a final report in markdown based on the following inputs.
 - License check: {license_check}
 - PII hard failures (direct identifiers): {pii_hard_failures}
 - PII warnings (structured name/address): {pii_warnings}
+- requirements.txt check: {requirements_check}
 
 ## PII Policy
 Explain the policy outcome clearly:

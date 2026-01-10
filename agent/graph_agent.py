@@ -38,6 +38,8 @@ from agent.docgen_prompt import REPORT_PROMPT
 from agent.license_check import check_license
 from agent.pii_scan import scan_for_pii
 from agent.header_fix import generate_header_snippet
+from agent.requirements_check import check_requirements_at_root
+
 from agent.config import ACCEPTED_LICENSE_TYPES
 
 from agent.utils import get_console_logger
@@ -95,6 +97,9 @@ class AgentState:
         default_factory=dict
     )  # relpath -> header snippet file path
 
+    # to check library licenses
+    requirements_ok: bool = True
+    requirements_info: dict[str, Any] = field(default_factory=dict)
 
 # ---- Nodes ----
 
@@ -327,12 +332,38 @@ async def node_generate_header_fixes(
     state.header_fixes = fixes
     return state
 
+def node_check_requirements(state: AgentState) -> AgentState:
+    """
+    Check whether requirements.txt exists at repo root.
+    Modified to use ReadOnlySandboxFS.
+    """
+    fs = ReadOnlySandboxFS(Path(state.root_dir))
+    repo_root = Path(state.root_dir).expanduser().resolve()
+
+    res = check_requirements_at_root(repo_root=repo_root, fs=fs)
+
+    state.requirements_ok = res.ok
+    state.requirements_info = {
+        "ok": res.ok,
+        "relpath": res.relpath,
+        "message": res.message,
+        "preview": res.preview,
+    }
+
+    if res.ok:
+        logger.info("Requirements check OK: %s", res.message)
+    else:
+        logger.warning("Requirements check FAILED: %s", res.message)
+
+    return state
 
 async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentState:
     # A compact summary you can print/store elsewhere
     hard_pii = sum(len(v) for v in state.pii_failures.values())
     warn_pii = sum(len(v) for v in state.pii_warnings.values())
 
+    req_status = "OK" if getattr(state, "requirements_ok", True) else "MISSING"
+    
     state.summary = (
         f"Processed {len(state.file_list)} files.\n"
         f"License: {'OK' if state.license_ok else 'FAILED'}\n"
@@ -343,12 +374,15 @@ async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentSt
         f"Docs generated: {len(state.docs)} files.\n"
         f"Output dir: {state.out_dir}\n"
     )
+    state.summary += f"requirements.txt at root: {req_status}\n"
 
     # generate a report in markdown format
     model_id = get_config_value(config, "model_id")
     llm = get_llm(model_id=model_id)
 
     now_iso = datetime.now(timezone.utc).isoformat(timespec="minutes")
+
+    requirements_check=getattr(state, "requirements_info", {}),
 
     prompt_template = REPORT_PROMPT
     prompt = prompt_template.format(
@@ -359,6 +393,7 @@ async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentSt
         license_check=getattr(state, "license_info", {}),
         pii_hard_failures=getattr(state, "pii_failures", {}),
         pii_warnings=getattr(state, "pii_warnings", {}),
+        requirements_check=getattr(state, "requirements_info", {}),
     )
 
     text, _ = await call_llm_normalized(llm, prompt)
@@ -390,11 +425,13 @@ def build_graph():
     g.add_node("check_license", node_check_license)
     g.add_node("scan_pii", node_scan_pii)
     g.add_node("generate_header_fixes", node_generate_header_fixes)
+    g.add_node("check_requirements", node_check_requirements)
     g.add_node("generate_docs", node_generate_docs)
     g.add_node("finalize", node_finalize)
 
     g.set_entry_point("discover_files")
-    g.add_edge("discover_files", "check_license")
+    g.add_edge("discover_files", "check_requirements")
+    g.add_edge("check_requirements", "check_license")
     g.add_edge("check_license", "check_headers")
     g.add_edge("check_headers", "generate_header_fixes")
     g.add_edge("generate_header_fixes", "scan_secrets")
