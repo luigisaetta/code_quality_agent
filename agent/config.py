@@ -30,7 +30,6 @@ STREAMING = False
 
 # type of OCI auth
 AUTH = "API_KEY"
-
 REGION = "eu-frankfurt-1"
 SERVICE_ENDPOINT = f"https://inference.generativeai.{REGION}.oci.oraclecloud.com"
 

@@ -30,6 +30,18 @@ REQUIRED_KEYS = [
     "License:",
 ]
 
+HEADER_TEMPLATE = '''"""
+File name: {file_name}
+Author: {author}
+Date last modified: {date_last_modified}
+Python Version: {python_version}
+License: {license}
+
+Description:
+{description_block}
+"""
+'''
+
 DATE_RE = re.compile(r"^Date last modified:\s*(.+)\s*$", re.MULTILINE)
 
 

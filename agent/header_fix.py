@@ -8,7 +8,6 @@ Outputs patch text (unified diff) to apply externally (repo is read-only).
 from __future__ import annotations
 
 import ast
-import difflib
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -16,31 +15,14 @@ from typing import Any
 
 from agent.docgen_utils import call_llm_normalized
 from agent.utils import get_console_logger
+from agent.header_rules import REQUIRED_KEYS, HEADER_TEMPLATE
 from agent.config import PYTHON_VERSION
 
 #
-# This is the template for the Header
+# The template for the Header is in agent/header_rules.py
 #
-HEADER_TEMPLATE = '''"""
-File name: {file_name}
-Author: {author}
-Date last modified: {date_last_modified}
-Python Version: {python_version}
-License: {license}
 
-Description:
-{description_block}
-"""
-'''
-
-REQUIRED_HEADER_FIELDS = (
-    "File name:",
-    "Author:",
-    "Date last modified:",
-    "Python Version:",
-    "License:",
-    "Description:",
-)
+REQUIRED_HEADER_FIELDS = REQUIRED_KEYS
 
 DESC_GEN_PROMPT = """
 You are a senior Python engineer.
