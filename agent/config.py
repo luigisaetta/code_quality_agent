@@ -56,3 +56,19 @@ ENABLE_DOC_GENERATION = False
 
 # used fopr header generation. It is the minimum ìversion accepted.
 PYTHON_VERSION = "3.11"
+
+# Licenses you allow for dependencies (use SPDX-ish IDs where possible)
+ACCEPTED_DEP_LICENSES = {
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "BSD",
+    "ISC",
+    "MPL-2.0",
+    "PSF-2.0",
+}
+
+# Policy knobs
+FAIL_ON_UNKNOWN_DEP_LICENSE = False  # usually False at first
+FAIL_ON_NOT_INSTALLED_DEP = False

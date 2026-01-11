@@ -44,7 +44,15 @@ from agent.config import ACCEPTED_LICENSE_TYPES
 
 from agent.utils import get_console_logger
 
-from agent.config import LLM_MODEL_ID, ENABLE_DOC_GENERATION
+from agent.dep_license_check import check_dependency_licenses
+from agent.config import (
+    ACCEPTED_DEP_LICENSES,
+    FAIL_ON_UNKNOWN_DEP_LICENSE,
+    FAIL_ON_NOT_INSTALLED_DEP,
+    LLM_MODEL_ID,
+    ENABLE_DOC_GENERATION,
+)
+
 
 logger = get_console_logger()
 
@@ -100,6 +108,12 @@ class AgentState:
     # to check library licenses
     requirements_ok: bool = True
     requirements_info: dict[str, Any] = field(default_factory=dict)
+
+    dep_license_ok: bool = True
+    dep_licenses: list[dict[str, Any]] = field(default_factory=list)
+    dep_license_failures: list[dict[str, Any]] = field(default_factory=list)
+    dep_license_warnings: list[dict[str, Any]] = field(default_factory=list)
+
 
 # ---- Nodes ----
 
@@ -332,6 +346,7 @@ async def node_generate_header_fixes(
     state.header_fixes = fixes
     return state
 
+
 def node_check_requirements(state: AgentState) -> AgentState:
     """
     Check whether requirements.txt exists at repo root.
@@ -357,43 +372,164 @@ def node_check_requirements(state: AgentState) -> AgentState:
 
     return state
 
-async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentState:
-    # A compact summary you can print/store elsewhere
-    hard_pii = sum(len(v) for v in state.pii_failures.values())
-    warn_pii = sum(len(v) for v in state.pii_warnings.values())
 
-    req_status = "OK" if getattr(state, "requirements_ok", True) else "MISSING"
-    
+def node_check_dep_licenses(state: AgentState) -> AgentState:
+    """
+    Check licenses of direct dependencies from requirements.txt.
+    Requires that dependencies are installed in the runtime environment to be accurate.
+    """
+    fs = ReadOnlySandboxFS(Path(state.root_dir))
+
+    # If requirements missing, we cannot proceed reliably
+    req_info = getattr(state, "requirements_info", {}) or {}
+    if not req_info.get("ok", True):
+        state.dep_license_ok = (
+            True  # don't fail the run, but warn in report via requirements_info
+        )
+        state.dep_licenses = []
+        state.dep_license_failures = []
+        state.dep_license_warnings = []
+        return state
+
+    req_text = fs.read_text("requirements.txt")
+
+    res = check_dependency_licenses(
+        requirements_text=req_text,
+        accepted_licenses=set(ACCEPTED_DEP_LICENSES),
+        fail_on_unknown=bool(FAIL_ON_UNKNOWN_DEP_LICENSE),
+        fail_on_not_installed=bool(FAIL_ON_NOT_INSTALLED_DEP),
+    )
+
+    # Store as JSON-serializable dicts
+    state.dep_license_ok = res.ok
+    state.dep_licenses = [
+        {
+            "requirement": d.requirement,
+            "distribution": d.distribution,
+            "version": d.version,
+            "license": d.license,
+            "source": d.source,
+        }
+        for d in res.deps
+    ]
+    state.dep_license_failures = [
+        {
+            "requirement": d.requirement,
+            "distribution": d.distribution,
+            "version": d.version,
+            "license": d.license,
+            "source": d.source,
+        }
+        for d in res.failures
+    ]
+    state.dep_license_warnings = [
+        {
+            "requirement": d.requirement,
+            "distribution": d.distribution,
+            "version": d.version,
+            "license": d.license,
+            "source": d.source,
+        }
+        for d in res.warnings
+    ]
+
+    if res.ok:
+        logger.info("Dependency license check OK. %s", res.message)
+    else:
+        logger.warning("Dependency license check FAILED. %s", res.message)
+
+    return state
+
+
+async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentState:
+    # ---- Compute counts ----
+    hard_pii = sum(len(v) for v in getattr(state, "pii_failures", {}).values())
+    warn_pii = sum(len(v) for v in getattr(state, "pii_warnings", {}).values())
+
+    req_ok = getattr(state, "requirements_ok", True)
+    req_status = "OK" if req_ok else "MISSING"
+
+    dep_failures = getattr(state, "dep_license_failures", []) or []
+    dep_warnings = getattr(state, "dep_license_warnings", []) or []
+
+    # Secrets are dict relpath -> findings list
+    secrets_count_files = len(getattr(state, "secrets", {}) or {})
+
+    # ---- Determine outcome deterministically (PASS/WARN/FAIL) ----
+    fail_reasons: list[str] = []
+    warn_reasons: list[str] = []
+
+    if secrets_count_files > 0:
+        fail_reasons.append("Secrets detected")
+
+    if hard_pii > 0:
+        fail_reasons.append("PII hard failures detected")
+
+    # repo license check
+    if not getattr(state, "license_ok", True):
+        fail_reasons.append("Repository license check failed")
+
+    # dependency license failures
+    if len(dep_failures) > 0:
+        fail_reasons.append("Dependency license failures")
+
+    # warnings
+    if not req_ok:
+        warn_reasons.append("requirements.txt missing at repository root")
+    if len(dep_warnings) > 0:
+        warn_reasons.append(
+            "Dependency license warnings (unknown/not installed/ambiguous)"
+        )
+    if warn_pii > 0:
+        warn_reasons.append("PII warnings (structured name/address)")
+
+    if fail_reasons:
+        overall = "FAIL"
+    elif warn_reasons:
+        overall = "WARN"
+    else:
+        overall = "PASS"
+
+    # ---- Summary ----
     state.summary = (
+        f"Outcome: {overall}\n"
         f"Processed {len(state.file_list)} files.\n"
-        f"License: {'OK' if state.license_ok else 'FAILED'}\n"
-        f"Header issues: {len(state.header_issues)} files.\n"
-        f"Secret findings: {len(state.secrets)} files.\n"
-        f"PII hard failures: {hard_pii} findings in {len(state.pii_failures)} files.\n"
-        f"PII warnings: {warn_pii} findings in {len(state.pii_warnings)} files.\n"
-        f"Docs generated: {len(state.docs)} files.\n"
+        f"Repository license: {'OK' if getattr(state, 'license_ok', True) else 'FAILED'}\n"
+        f"Dependency licenses: failures={len(dep_failures)}, warnings={len(dep_warnings)}\n"
+        f"requirements.txt at root: {req_status}\n"
+        f"Header issues: {len(getattr(state, 'header_issues', {}) or {})} files.\n"
+        f"Secret findings: {secrets_count_files} files.\n"
+        f"PII hard failures: {hard_pii} findings in {len(getattr(state, 'pii_failures', {}) or {})} files.\n"
+        f"PII warnings: {warn_pii} findings in {len(getattr(state, 'pii_warnings', {}) or {})} files.\n"
+        f"Docs generated: {len(getattr(state, 'docs', {}) or {})} files.\n"
         f"Output dir: {state.out_dir}\n"
     )
-    state.summary += f"requirements.txt at root: {req_status}\n"
+    if fail_reasons:
+        state.summary += "Fail reasons: " + "; ".join(fail_reasons) + "\n"
+    if (not fail_reasons) and warn_reasons:
+        state.summary += "Warn reasons: " + "; ".join(warn_reasons) + "\n"
 
-    # generate a report in markdown format
+    # ---- Generate markdown report via LLM ----
     model_id = get_config_value(config, "model_id")
     llm = get_llm(model_id=model_id)
 
     now_iso = datetime.now(timezone.utc).isoformat(timespec="minutes")
 
-    requirements_check=getattr(state, "requirements_info", {}),
-
-    prompt_template = REPORT_PROMPT
-    prompt = prompt_template.format(
+    prompt = REPORT_PROMPT.format(
         now_datetime=now_iso,
         num_files=len(state.file_list),
-        header_issues=state.header_issues,
-        secret_issues=state.secrets,
-        license_check=getattr(state, "license_info", {}),
-        pii_hard_failures=getattr(state, "pii_failures", {}),
-        pii_warnings=getattr(state, "pii_warnings", {}),
-        requirements_check=getattr(state, "requirements_info", {}),
+        header_issues=getattr(state, "header_issues", {}) or {},
+        secret_issues=getattr(state, "secrets", {}) or {},
+        license_check=getattr(state, "license_info", {}) or {},
+        dep_license_failures=dep_failures,
+        dep_license_warnings=dep_warnings,
+        pii_hard_failures=getattr(state, "pii_failures", {}) or {},
+        pii_warnings=getattr(state, "pii_warnings", {}) or {},
+        requirements_check=getattr(state, "requirements_info", {}) or {},
+        # Optional: if you add these placeholders to the prompt, you can pass them too:
+        # overall_outcome=overall,
+        # fail_reasons=fail_reasons,
+        # warn_reasons=warn_reasons,
     )
 
     text, _ = await call_llm_normalized(llm, prompt)
@@ -401,12 +537,13 @@ async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentSt
     logger.info("")
     logger.info("Final report: %s", text)
 
-    # save to file
+    # ---- Save to file ----
     current_day = now_iso[:10]
     out_dir = Path(state.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     out_path = out_dir / f"report_{current_day}.md"
-    data = (text.rstrip() + "\n").encode("utf-8")
-    out_path.write_bytes(data)
+    out_path.write_text(text.rstrip() + "\n", encoding="utf-8")
 
     return state
 
@@ -426,13 +563,15 @@ def build_graph():
     g.add_node("scan_pii", node_scan_pii)
     g.add_node("generate_header_fixes", node_generate_header_fixes)
     g.add_node("check_requirements", node_check_requirements)
+    g.add_node("check_dep_licenses", node_check_dep_licenses)
     g.add_node("generate_docs", node_generate_docs)
     g.add_node("finalize", node_finalize)
 
     g.set_entry_point("discover_files")
     g.add_edge("discover_files", "check_requirements")
     g.add_edge("check_requirements", "check_license")
-    g.add_edge("check_license", "check_headers")
+    g.add_edge("check_license", "check_dep_licenses")
+    g.add_edge("check_dep_licenses", "check_headers")
     g.add_edge("check_headers", "generate_header_fixes")
     g.add_edge("generate_header_fixes", "scan_secrets")
     g.add_edge("scan_secrets", "scan_pii")

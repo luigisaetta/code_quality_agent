@@ -56,33 +56,53 @@ Generate a final report in markdown based on the following inputs.
 - Processed: {num_files}
 - Header issues found: {header_issues}
 - Secrets issues found: {secret_issues}
-- License check: {license_check}
+- License check (repository license file): {license_check}
+- Dependency license failures (requirements.txt direct deps): {dep_license_failures}
+- Dependency license warnings (unknown/not installed/ambiguous): {dep_license_warnings}
 - PII hard failures (direct identifiers): {pii_hard_failures}
 - PII warnings (structured name/address): {pii_warnings}
 - requirements.txt check: {requirements_check}
 
-## PII Policy
+## Policies
+### PII Policy
 Explain the policy outcome clearly:
 - HARD FAIL: direct identifiers (email, phone, IBAN, credit card, tax id, etc.)
 - WARN: possible names/addresses only when in structured form
 
-If there are any secrets issues and PII hard failures, the report must prominently state that 
-the policies are NOT satisfied.
+### Dependency license policy
+- A dependency is NON-COMPLIANT if its detected license is not in the accepted allow-list.
+- If a dependency license is UNKNOWN or NOT_INSTALLED, treat it as a WARNING unless configured otherwise.
+- If requirements.txt is missing at repository root, dependency checks are incomplete and this must be a STRONG WARNING.
+
+## Pass/Fail rules (must be explicit)
+The overall outcome is FAIL if any of the following are true:
+- Any secrets issues are found
+- Any PII hard failures exist
+- Repository license check indicates non-compliance or missing/invalid license (if applicable)
+- Any dependency license failures exist
+
+The overall outcome is WARN (not FAIL) if any of the following are true and none of the FAIL conditions hold:
+- requirements.txt is missing at repository root
+- Any dependency license warnings exist (UNKNOWN / NOT_INSTALLED / ambiguous like "BSD")
+- Any PII warnings exist
 
 ## Output requirements
 - Title: Code Compliance & Risk Assessment Report
 - Organize the report into dedicated sections with proper headings:
-  1) Executive summary (pass/fail + key numbers)
-  2) License compliance
-  3) Header compliance
-  4) Secrets scan results
-  5) PII compliance (separate subsections for HARD FAIL and WARN)
-  6) Recommendations (actionable, prioritized)
+  1) Executive summary (Outcome: PASS/FAIL/WARN + key numbers + strongest issues first)
+  2) Requirements & dependency visibility (requirements.txt presence + what was checked)
+  3) License compliance (repository license file)
+  4) Dependency license compliance (failures and warnings)
+  5) Header compliance
+  6) Secrets scan results
+  7) PII compliance (separate subsections for HARD FAIL and WARN)
+  8) Recommendations (actionable, prioritized)
 
 ## Safety rules for the report (highest priority)
 - Never include secrets or credentials.
 - Never include raw PII. If excerpts are present in the inputs, assume they are already masked;
   do not attempt to reconstruct or infer the original values.
+- Do not paste any third-party license text. Refer to licenses by name only.
 - When providing examples, always use placeholders.
 
 Keep it concise, practical, and suitable for a CI compliance artifact.
