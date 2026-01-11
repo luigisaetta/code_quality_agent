@@ -111,18 +111,18 @@ pip install langgraph -U
 git clone https://github.com/luigisaetta/code_quality_agent.git
 ```
 
-3. Create a config_private.py file, in the agent directory.
+4. Create a config_private.py file, in the agent directory.
 
 Start from the template provided in the repository and create a **config_private.py** file.
 Put in the file your compartment's OCID.
 
 
-4. Have your local OCI config setup
+5. Have your local OCI config setup
 
 Setup under $HOME/.oci
 See: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm
 
-5. Set policies to use Generative AI
+6. Set policies to use Generative AI
 
 See: https://docs.oracle.com/en-us/iaas/Content/generative-ai/iam-policies.htm
 
