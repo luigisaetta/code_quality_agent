@@ -161,4 +161,18 @@ If some dependencies are not installed:
 - Execution may be slower
 - License data may be incomplete or ambiguous
 
-**Use only for local or exploratory runs.**
+## Important Note on Results and Human Review
+
+This agent is intended to **assist** with code quality, security, and license compliance checks, **not to replace entirely human judgment**.
+
+While the agent applies deterministic rules and best-effort analysis, it may produce:
+- **False positives** (e.g. ambiguous licenses, heuristic PII detection, conservative policy checks)
+- **Incomplete results** depending on the execution environment (installed dependencies, network access, metadata quality)
+
+For this reason:
+- **All findings must be reviewed and validated by a human**
+- The agent’s output should be treated as an **input to review**, not a final decision
+- Final responsibility for compliance, security, and legal interpretation always remains with the user
+
+This is especially important for compliance-critical areas such as **licenses, personal data (PII), and security findings**.
+
