@@ -5,6 +5,7 @@ A lightweight **LangGraph-based** agent that scans a local codebase (read-only) 
 - ✅ **Check file headers** against a simple template policy
 - ✅ **Scan for secrets** (heuristic patterns + suspicious assignments)
 - ✅ **Check for license**
+- ✅ **Check for dependencies licenses**
 - ✅ **Generate header fixes**
 - ✅ **Generate per-file documentation** (optional) in Markdown via an LLM (OCI GenAI via LangChain)
 
