@@ -2,20 +2,28 @@
 dep_license_check.py
 
 Checks licenses for dependencies listed in requirements.txt (direct deps).
-Uses installed package metadata (importlib.metadata).
-No web calls. Deterministic.
+
+Primary source:
+- Installed package metadata (importlib.metadata)
+
+Fallback source (when installed metadata cannot determine license):
+- PyPI JSON API for the *installed version* (best-effort)
 
 Limitations:
 - If dependencies are not installed in the environment running the agent, licenses will be NOT_INSTALLED.
 - Requirements parsing is intentionally conservative; complex pip options are ignored.
+- PyPI fallback requires network access and relies on PyPI metadata quality.
 """
 
 from __future__ import annotations
 
+import json
 import re
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from importlib import metadata
-from typing import Iterable
+from typing import Any, Iterable
 
 
 # ---- Data models ----
@@ -27,7 +35,7 @@ class DepLicenseInfo:
     distribution: str  # normalized dist name (best-effort)
     version: str | None
     license: str  # normalized license id or UNKNOWN/NOT_INSTALLED
-    source: str  # license_field | classifier | unknown | not_installed
+    source: str  # license_field | classifier | pypi_json | unknown | not_installed
 
 
 @dataclass(frozen=True)
@@ -92,7 +100,7 @@ def extract_dist_name(requirement: str) -> str | None:
     return m.group(1)
 
 
-# ---- License extraction from installed metadata ----
+# ---- License extraction helpers ----
 
 
 def _normalize_license_string(s: str) -> str:
@@ -110,23 +118,43 @@ def _normalize_license_string(s: str) -> str:
 
     # Common normalizations
     mapping = {
+        # Apache
         "APACHE 2.0": "Apache-2.0",
         "APACHE-2.0": "Apache-2.0",
         "APACHE SOFTWARE LICENSE": "Apache-2.0",
+        # MIT
         "MIT": "MIT",
         "MIT LICENSE": "MIT",
+        # BSD
         "BSD": "BSD",  # ambiguous; you may choose to treat as warn
+        # ISC
         "ISC": "ISC",
+        # MPL
         "MPL 2.0": "MPL-2.0",
         "MPL-2.0": "MPL-2.0",
         "MOZILLA PUBLIC LICENSE 2.0": "MPL-2.0",
+        # UPL (Oracle / Universal Permissive License)
+        "UPL-1.0": "UPL-1.0",
+        "UPL 1.0": "UPL-1.0",
+        "UNIVERSAL PERMISSIVE LICENSE 1.0": "UPL-1.0",
+        "UNIVERSAL PERMISSIVE LICENSE (UPL) 1.0": "UPL-1.0",
+        # BSD variants commonly seen in metadata
+        "MODIFIED BSD LICENSE": "BSD",
+        "NEW BSD LICENSE": "BSD-3-Clause",     # optional, if you want to be more specific
+        "REVISED BSD LICENSE": "BSD-3-Clause", # optional
+        "BSD-3-CLAUSE": "BSD-3-Clause",
+        "BSD 3-CLAUSE": "BSD-3-Clause",
+        "BSD-2-CLAUSE": "BSD-2-Clause",
+        "BSD 2-CLAUSE": "BSD-2-Clause",
     }
+    
+    if "MODIFIED BSD" in u:
+        return "BSD"
 
-    # direct hit
     if u in mapping:
         return mapping[u]
 
-    # a few substring matches
+    # Substring matches
     if "APACHE" in u and "2" in u:
         return "Apache-2.0"
     if "MIT" in u:
@@ -139,6 +167,8 @@ def _normalize_license_string(s: str) -> str:
         return "MPL-2.0"
     if "ISC" in u:
         return "ISC"
+    if "UPL" in u:
+        return "UPL-1.0"
 
     # Keep original (but trimmed) if it looks like an SPDX-ish token
     if re.fullmatch(r"[A-Za-z0-9.\-+]+", v):
@@ -151,7 +181,6 @@ def _license_from_classifiers(classifiers: Iterable[str]) -> str | None:
     """
     Map Trove classifiers to normalized license ids.
     """
-    # Minimal mapping; extend as needed
     trove_map = {
         "License :: OSI Approved :: MIT License": "MIT",
         "License :: OSI Approved :: Apache Software License": "Apache-2.0",
@@ -160,12 +189,14 @@ def _license_from_classifiers(classifiers: Iterable[str]) -> str | None:
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)": "MPL-2.0",
         'License :: OSI Approved :: BSD 3-Clause "New" or "Revised" License': "BSD-3-Clause",
         'License :: OSI Approved :: BSD 2-Clause "Simplified" License': "BSD-2-Clause",
+        # Note: UPL does not reliably appear as a Trove classifier; use license_expression instead.
     }
     for c in classifiers:
         c = c.strip()
         if c in trove_map:
             return trove_map[c]
-    # fallback: any license classifier contains keywords
+
+    # fallback: keyword scan
     for c in classifiers:
         u = c.upper()
         if "LICENSE ::" not in u:
@@ -185,9 +216,108 @@ def _license_from_classifiers(classifiers: Iterable[str]) -> str | None:
     return None
 
 
+def _normalize_dist_for_pypi(name: str) -> str:
+    """
+    Normalize project name for PyPI URLs (PEP 503-ish):
+    lowercase and replace runs of [-_.] with '-'.
+    """
+    return re.sub(r"[-_.]+", "-", name.strip().lower())
+
+
+# Simple in-process cache to avoid repeated HTTP calls
+_PYPI_LICENSE_CACHE: dict[tuple[str, str | None], str | None] = {}
+
+
+def _license_from_pypi_json(payload: dict[str, Any]) -> str | None:
+    """
+    Extract license from PyPI JSON payload (best-effort), including PEP 639 fields.
+
+    Returns a normalized license string (e.g., 'UPL-1.0', 'MIT', 'Apache-2.0') or None.
+    """
+    info = payload.get("info") or {}
+
+    # 1) PEP 639: license_expression (preferred)
+    lic_expr = (info.get("license_expression") or "").strip()
+    if lic_expr:
+        lic_norm = _normalize_license_string(lic_expr)
+        if lic_norm != "UNKNOWN":
+            return lic_norm
+
+    # 2) Alternative shape: info.license could be a dict with expression
+    lic_obj = info.get("license")
+    if isinstance(lic_obj, dict):
+        expr = (lic_obj.get("expression") or "").strip()
+        if expr:
+            expr_norm = _normalize_license_string(expr)
+            if expr_norm != "UNKNOWN":
+                return expr_norm
+
+    # 3) Trove classifiers
+    classifiers = info.get("classifiers") or []
+    lic = _license_from_classifiers(classifiers)
+    if lic:
+        return lic
+
+    # 4) Legacy string field: info.license
+    if isinstance(lic_obj, str):
+        lic_raw = lic_obj.strip()
+    else:
+        lic_raw = (info.get("license") or "").strip()
+
+    if lic_raw:
+        lic_norm = _normalize_license_string(lic_raw)
+        if lic_norm != "UNKNOWN":
+            return lic_norm
+
+    return None
+
+
+def _get_license_from_pypi(dist_name: str, version: str | None, *, timeout_s: int = 5) -> str | None:
+    """
+    Best-effort PyPI fallback: query PyPI JSON API for the given dist and (if provided) version.
+
+    Returns a normalized license string, or None if not found / network error / ambiguous.
+    """
+    key = (dist_name, version)
+    if key in _PYPI_LICENSE_CACHE:
+        return _PYPI_LICENSE_CACHE[key]
+
+    pypi_name = _normalize_dist_for_pypi(dist_name)
+
+    # Prefer version-specific endpoint for determinism.
+    if version:
+        url = f"https://pypi.org/pypi/{pypi_name}/{version}/json"
+    else:
+        url = f"https://pypi.org/pypi/{pypi_name}/json"
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "code-quality-agent/1.0 (license-check)",
+        },
+        method="GET",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+        _PYPI_LICENSE_CACHE[key] = None
+        return None
+
+    lic = _license_from_pypi_json(data)
+    _PYPI_LICENSE_CACHE[key] = lic
+    return lic
+
+
 def get_installed_dist_license(dist_name: str) -> DepLicenseInfo:
     """
     dist_name is a distribution name (best-effort).
+
+    Returns DepLicenseInfo with license info from installed metadata.
+    If not installed, license is NOT_INSTALLED.
+    If license cannot be determined from local metadata, tries PyPI fallback for the installed version.
     """
     try:
         md = metadata.metadata(dist_name)
@@ -201,6 +331,7 @@ def get_installed_dist_license(dist_name: str) -> DepLicenseInfo:
             source="not_installed",
         )
 
+    # 1) Local metadata: License field
     lic_raw = (md.get("License") or "").strip()
     lic = _normalize_license_string(lic_raw)
     if lic not in {"UNKNOWN"} and lic_raw:
@@ -212,6 +343,7 @@ def get_installed_dist_license(dist_name: str) -> DepLicenseInfo:
             source="license_field",
         )
 
+    # 2) Local metadata: Trove classifiers
     classifiers = md.get_all("Classifier") or []
     lic2 = _license_from_classifiers(classifiers)
     if lic2:
@@ -221,6 +353,17 @@ def get_installed_dist_license(dist_name: str) -> DepLicenseInfo:
             version=ver,
             license=lic2,
             source="classifier",
+        )
+
+    # CHANGE: PyPI fallback when local metadata is insufficient (license would be UNKNOWN)
+    lic3 = _get_license_from_pypi(dist_name, ver)
+    if lic3:
+        return DepLicenseInfo(
+            requirement=dist_name,
+            distribution=dist_name,
+            version=ver,
+            license=lic3,
+            source="pypi_json",
         )
 
     return DepLicenseInfo(
@@ -245,10 +388,10 @@ def check_dependency_licenses(
     failures: list[DepLicenseInfo] = []
     warnings: list[DepLicenseInfo] = []
 
+    # Process each requirement in requirements.txt
     for req in req_lines:
         dist = extract_dist_name(req)
         if not dist:
-            # weird line; warn
             warnings.append(
                 DepLicenseInfo(
                     requirement=req,
@@ -261,6 +404,7 @@ def check_dependency_licenses(
             continue
 
         info = get_installed_dist_license(dist)
+
         # Keep original requirement for traceability
         info = DepLicenseInfo(
             requirement=req,

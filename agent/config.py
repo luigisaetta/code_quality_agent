@@ -67,6 +67,7 @@ ACCEPTED_DEP_LICENSES = {
     "ISC",
     "MPL-2.0",
     "PSF-2.0",
+    "UPL-1.0",
 }
 
 # Policy knobs

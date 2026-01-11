@@ -561,9 +561,9 @@ def build_graph():
     g.add_node("scan_secrets", node_scan_secrets)
     g.add_node("check_license", node_check_license)
     g.add_node("scan_pii", node_scan_pii)
-    g.add_node("generate_header_fixes", node_generate_header_fixes)
     g.add_node("check_requirements", node_check_requirements)
     g.add_node("check_dep_licenses", node_check_dep_licenses)
+    g.add_node("generate_header_fixes", node_generate_header_fixes)
     g.add_node("generate_docs", node_generate_docs)
     g.add_node("finalize", node_finalize)
 
