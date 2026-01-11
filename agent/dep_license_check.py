@@ -140,14 +140,14 @@ def _normalize_license_string(s: str) -> str:
         "UNIVERSAL PERMISSIVE LICENSE (UPL) 1.0": "UPL-1.0",
         # BSD variants commonly seen in metadata
         "MODIFIED BSD LICENSE": "BSD",
-        "NEW BSD LICENSE": "BSD-3-Clause",     # optional, if you want to be more specific
-        "REVISED BSD LICENSE": "BSD-3-Clause", # optional
+        "NEW BSD LICENSE": "BSD-3-Clause",  # optional, if you want to be more specific
+        "REVISED BSD LICENSE": "BSD-3-Clause",  # optional
         "BSD-3-CLAUSE": "BSD-3-Clause",
         "BSD 3-CLAUSE": "BSD-3-Clause",
         "BSD-2-CLAUSE": "BSD-2-Clause",
         "BSD 2-CLAUSE": "BSD-2-Clause",
     }
-    
+
     if "MODIFIED BSD" in u:
         return "BSD"
 
@@ -272,7 +272,9 @@ def _license_from_pypi_json(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def _get_license_from_pypi(dist_name: str, version: str | None, *, timeout_s: int = 5) -> str | None:
+def _get_license_from_pypi(
+    dist_name: str, version: str | None, *, timeout_s: int = 5
+) -> str | None:
     """
     Best-effort PyPI fallback: query PyPI JSON API for the given dist and (if provided) version.
 
