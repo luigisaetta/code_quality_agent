@@ -136,3 +136,24 @@ run
 run_agent.sh
 ```
 
+## Dependency License Checks – Execution Requirements
+
+This agent checks license compliance for direct Python dependencies listed in `requirements.txt`.
+
+### Recommended (deterministic & fast)
+Run the agent in an environment where:
+- All dependencies from `requirements.txt`, from the project to-be-scanned, are installed
+- Agent runtime dependencies (see Setup above) are installed
+
+This allows the agent to read license data from installed package metadata:
+- Offline execution
+- Faster and reproducible results  
+**Recommended for CI and release validation.**
+
+### Fallback (best-effort)
+If some dependencies are not installed:
+- Network access is required (the agent will do a PyPI JSON lookup)
+- Execution may be slower
+- License data may be incomplete or ambiguous
+
+**Use only for local or exploratory runs.**
