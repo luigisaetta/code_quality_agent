@@ -48,13 +48,15 @@ ACCEPTED_LICENSE_TYPES = [
     "MIT",
     "Apache-2.0",
     "BSD-3-Clause",
+    "BSD-2-Clause",
+    "UPL-1.0"
 ]
 
 # set this flag to TRue if you want to create local docs in md format.
 # Not needed to check code quality.
 ENABLE_DOC_GENERATION = False
 
-# used fopr header generation. It is the minimum ìversion accepted.
+# used for header generation. It is the minimum version accepted.
 PYTHON_VERSION = "3.11"
 
 # Licenses you allow for dependencies (use SPDX-ish IDs where possible)
