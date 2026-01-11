@@ -98,7 +98,7 @@ activate the environment. If you're using conda:
 conda activate code_quality_agent
 ```
 
-2. Install the following python libraries
+2. Install the following python libraries:
 ```
 pip install oci -U
 pip install langchain -U
@@ -106,7 +106,12 @@ pip install langchain-oci -U
 pip install langgraph -U
 ```
 
-3. Create a config_private.py file
+3. Clone this repository
+```
+git clone https://github.com/luigisaetta/code_quality_agent.git
+```
+
+3. Create a config_private.py file, in the agent directory.
 
 Start from the template provided in the repository and create a **config_private.py** file.
 Put in the file your compartment's OCID.
