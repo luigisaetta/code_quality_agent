@@ -133,8 +133,7 @@ Modify the [run_agent.sh](./run_agent.sh) file.
 
 Change the params:
 - root (root directory for all the files to be scanned)
-- out
-with the full path to input_dir and output_dir
+- out: with the full path to the output dir
 
 run 
 ```
