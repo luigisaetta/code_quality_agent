@@ -130,6 +130,8 @@ Change the params:
 - out
 with the full path to input_dir and output_dir
 
-run **run_agent.sh**
-
+run 
+```
+run_agent.sh
+```
 
