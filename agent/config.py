@@ -77,6 +77,8 @@ ENABLE_DOC_GENERATION = False
 PYTHON_VERSION = "3.11"
 
 # Licenses you allow for dependencies (use SPDX-ish IDs where possible)
+# see docs here: 
+# https://confluence.oraclecorp.com/confluence/display/CORPARCH/Licenses+Eligible+for+Pre-Approval+-+Distribution
 ACCEPTED_DEP_LICENSES = {
     "MIT",
     "Apache-2.0",
@@ -84,9 +86,13 @@ ACCEPTED_DEP_LICENSES = {
     "BSD-2-Clause",
     "BSD",
     "ISC",
+    # Mozilla Public License
     "MPL-2.0",
+    # Python Software Foundation License
     "PSF-2.0",
     "UPL-1.0",
+    # Eclipse Public License
+    "EPL-2.0",
 }
 
 # Policy knobs
