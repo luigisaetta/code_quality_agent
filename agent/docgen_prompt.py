@@ -58,6 +58,7 @@ Today is: {now_datetime}.
 Generate a final report in markdown based on the following inputs.
 
 ## Inputs
+- Root directory: {root_dir}
 - Processed: {num_files}
 - Header issues found: {header_issues}
 - Secrets issues found: {secret_issues}
@@ -93,6 +94,7 @@ The overall outcome is WARN (not FAIL) if any of the following are true and none
 
 ## Output requirements
 - Title: Code Compliance & Risk Assessment Report
+- Analysis made on root directory: {root_dir}
 - Organize the report into dedicated sections with proper headings:
   1) Executive summary (Outcome: PASS/FAIL/WARN + key numbers + strongest issues first)
   2) Requirements & dependency visibility (requirements.txt presence + what was checked)

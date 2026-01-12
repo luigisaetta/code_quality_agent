@@ -17,11 +17,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from agent.config import FILES_PATTERN
+
 # max file size to read
 MAX_BYTES = 2_000_000
 
-# for now, only Python files
-FILES_PATTERN = "*.py"
+
 # for listing any file (not only python)
 ALL_FILES_PATTERN = "*"
 

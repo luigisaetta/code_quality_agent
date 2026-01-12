@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
+from fnmatch import fnmatch
 
 from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
@@ -41,7 +42,7 @@ from agent.header_fix import generate_header_snippet
 from agent.requirements_check import check_requirements_at_root
 from agent.gitignore_utils import parse_gitignore, is_ignored
 
-from agent.config import ACCEPTED_LICENSE_TYPES
+from agent.config import ACCEPTED_LICENSE_TYPES, EXCLUDED_PATHS
 
 from agent.utils import get_console_logger
 
@@ -71,6 +72,12 @@ def get_config_value(
         return default
     return configurable.get(key, default)
 
+def _is_excluded(relpath: str) -> bool:
+    """
+    Check if a given repo-relative path matches any of the excluded patterns.
+    """
+    posix = relpath.replace("\\", "/")
+    return any(fnmatch(posix, pat) for pat in EXCLUDED_PATHS)
 
 # ---- State ----
 @dataclass
@@ -134,7 +141,16 @@ def node_discover_files(state: AgentState) -> AgentState:
     """
     fs = ReadOnlySandboxFS(Path(state.root_dir))
     source_files = fs.list_source_files()
-    state.file_list = [str(fs.relpath(p)) for p in source_files]
+
+    # apply any exclusions
+    files: list[str] = []
+    for p in source_files:
+        rel = str(fs.relpath(p))
+        if _is_excluded(rel):
+            continue
+        files.append(rel)
+
+    state.file_list = files
 
     logger.info("")
     logger.info("Discovered %d source files.", len(state.file_list))
@@ -505,6 +521,9 @@ def node_load_gitignore(state: AgentState) -> AgentState:
     state.ignored_paths = ignored
 
     logger.info("Loaded .gitignore: %d ignored files.", len(ignored))
+    for p in ignored:
+        logger.info(" - %s", p)
+        
     return state
 
 
@@ -619,6 +638,7 @@ async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentSt
     # For REPORT_PROMPT: keep backward compatibility with your existing placeholder name `secret_issues`
     # by passing only the FAIL set there (policy-critical), and optionally include warnings in requirements_check.
     prompt = REPORT_PROMPT.format(
+        root_dir=state.root_dir,
         now_datetime=now_iso,
         num_files=len(state.file_list),
         header_issues=header_issues,

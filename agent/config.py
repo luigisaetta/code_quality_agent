@@ -41,7 +41,23 @@ TEMPERATURE = 0.0
 TOP_P = 1
 MAX_TOKENS = 4000
 
+#
 # specific configs for the Code Quality Agent
+#
+# for now, only Python files
+FILES_PATTERN = "*.py"
+
+# ---- File exclusions (repo-relative glob patterns) ----
+EXCLUDED_PATHS = [
+    ".git/**",
+    ".venv/**",
+    "venv/**",
+    "__pycache__/**",
+    "*.pyc",
+    "build/**",
+    "dist/**",
+    "node_modules/**",
+]
 
 # Accepted license identifiers (you decide the vocabulary)
 ACCEPTED_LICENSE_TYPES = [
@@ -52,11 +68,12 @@ ACCEPTED_LICENSE_TYPES = [
     "UPL-1.0",
 ]
 
-# set this flag to TRue if you want to create local docs in md format.
+# set this flag to True if you want to create local docs in md format.
 # Not needed to check code quality.
 ENABLE_DOC_GENERATION = False
 
-# used for header generation. It is the minimum version accepted.
+# used for header generation. 
+# It is the minimum version accepted.
 PYTHON_VERSION = "3.11"
 
 # Licenses you allow for dependencies (use SPDX-ish IDs where possible)

@@ -45,7 +45,6 @@ class PiiFinding:
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 
 # phone is tricky; keep it conservative but useful
-# Matches: +39 333 1234567, 333-123-4567, (06) 1234567, 06 1234567, etc.
 _PHONE_RE = re.compile(
     r"""
     (?<!\w)
