@@ -98,9 +98,9 @@ The overall outcome is WARN (not FAIL) if any of the following are true and none
   2) Requirements & dependency visibility (requirements.txt presence + what was checked)
   3) License compliance (repository license file)
   4) Dependency license compliance (failures and warnings)
-  5) Header compliance
-  6) Secrets scan results
-  7) PII compliance (separate subsections for HARD FAIL and WARN)
+  5) Secrets scan results
+  6) PII compliance (separate subsections for HARD FAIL and WARN)
+  7) Header compliance
   8) Recommendations (actionable, prioritized)
 
 ## Safety rules for the report (highest priority)

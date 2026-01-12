@@ -39,6 +39,7 @@ from agent.license_check import check_license
 from agent.pii_scan import scan_for_pii
 from agent.header_fix import generate_header_snippet
 from agent.requirements_check import check_requirements_at_root
+from agent.gitignore_utils import parse_gitignore, is_ignored
 
 from agent.config import ACCEPTED_LICENSE_TYPES
 
@@ -114,6 +115,13 @@ class AgentState:
     dep_license_failures: list[dict[str, Any]] = field(default_factory=list)
     dep_license_warnings: list[dict[str, Any]] = field(default_factory=list)
 
+    # .gitignore
+    ignored_paths: set[str] = field(default_factory=set)  # repo-relative posix paths
+
+    # Secrets split
+    secrets_failures: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    secrets_warnings: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+
 
 # ---- Nodes ----
 
@@ -157,30 +165,56 @@ def node_check_headers(state: AgentState) -> AgentState:
 
 
 def node_scan_secrets(state: AgentState) -> AgentState:
+    """
+    Scan files for secrets using predefined patterns.
+    Modified to use ReadOnlySandboxFS.
+    It distinguishes between ignored files (warnings) and others (failures).
+    """
     fs = ReadOnlySandboxFS(Path(state.root_dir))
-    all_findings: dict[str, list[dict[str, Any]]] = {}
+    failures: dict[str, list[dict[str, Any]]] = {}
+    warnings: dict[str, list[dict[str, Any]]] = {}
+
+    ignored = getattr(state, "ignored_paths", set()) or set()
 
     for rel in state.file_list:
-
         logger.info("Scanning secrets for: %s...", rel)
 
         src = fs.read_text(rel)
         findings = scan_for_secrets(src)
-        if findings:
-            all_findings[rel] = [
-                {"kind": f.kind, "line": f.line, "excerpt": f.excerpt} for f in findings
-            ]
+        if not findings:
+            continue
 
-    state.secrets = all_findings
+        payload = [
+            {"kind": f.kind, "line": f.line, "excerpt": f.excerpt} for f in findings
+        ]
+
+        # DOWNGRADE: if file is ignored, treat as warning (still report)
+        if rel.replace("\\", "/") in ignored:
+            warnings[rel] = payload
+        else:
+            failures[rel] = payload
+
+    # Keep legacy state.secrets if you want, but prefer split
+    state.secrets_failures = failures
+    state.secrets_warnings = warnings
+    state.secrets = failures  # optional: keep old behavior for other code paths
+
     return state
 
 
 def node_scan_pii(state: AgentState) -> AgentState:
+    """
+    Scan files for PII using predefined patterns.
+    Modified to use ReadOnlySandboxFS.
+    It distinguishes between ignored files (warnings) and others (failures).
+    """
     fs = ReadOnlySandboxFS(Path(state.root_dir))
 
     all_findings: dict[str, list[dict[str, Any]]] = {}
     failures: dict[str, list[dict[str, Any]]] = {}
     warnings: dict[str, list[dict[str, Any]]] = {}
+
+    ignored = getattr(state, "ignored_paths", set()) or set()
 
     for rel in state.file_list:
         logger.info("Scanning PII for: %s...", rel)
@@ -202,18 +236,25 @@ def node_scan_pii(state: AgentState) -> AgentState:
         ]
         all_findings[rel] = payload
 
-        fail_payload = [p for p in payload if p["severity"] == "fail"]
-        warn_payload = [p for p in payload if p["severity"] == "warn"]
+        rel_posix = rel.replace("\\", "/")
+        is_ign = rel_posix in ignored
 
-        if fail_payload:
-            failures[rel] = fail_payload
-        if warn_payload:
-            warnings[rel] = warn_payload
+        # DOWNGRADE: any "fail" in ignored files becomes "warn"
+        for p in payload:
+            sev = p["severity"]
+            if is_ign and sev == "fail":
+                p = dict(p)
+                p["severity"] = "warn"
+                p["confidence"] = "low"  # optional: signal downgraded severity
+                warnings.setdefault(rel, []).append(p)
+            elif sev == "fail":
+                failures.setdefault(rel, []).append(p)
+            else:
+                warnings.setdefault(rel, []).append(p)
 
     state.pii_findings = all_findings
     state.pii_failures = failures
     state.pii_warnings = warnings
-
     return state
 
 
@@ -441,47 +482,107 @@ def node_check_dep_licenses(state: AgentState) -> AgentState:
     return state
 
 
-async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentState:
-    # ---- Compute counts ----
-    hard_pii = sum(len(v) for v in getattr(state, "pii_failures", {}).values())
-    warn_pii = sum(len(v) for v in getattr(state, "pii_warnings", {}).values())
+def node_load_gitignore(state: AgentState) -> AgentState:
+    """
+    Load and parse .gitignore from repo root, determine ignored paths.
+    Modified to use ReadOnlySandboxFS.
+    """
+    fs = ReadOnlySandboxFS(Path(state.root_dir))
 
-    req_ok = getattr(state, "requirements_ok", True)
-    req_status = "OK" if req_ok else "MISSING"
+    try:
+        gi = fs.read_text(".gitignore")
+    except FileNotFoundError:
+        state.ignored_paths = set()
+        logger.info("No .gitignore found at repo root.")
+        return state
+
+    rules = parse_gitignore(gi)
+
+    # Use list_all_files to know which repo paths exist
+    all_files = [str(fs.relpath(p)).replace("\\", "/") for p in fs.list_all_files()]
+
+    ignored = {p for p in all_files if is_ignored(p, rules)}
+    state.ignored_paths = ignored
+
+    logger.info("Loaded .gitignore: %d ignored files.", len(ignored))
+    return state
+
+
+async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentState:
+    """
+    Finalize run:
+    - compute deterministic PASS/WARN/FAIL outcome
+    - generate LLM report (markdown) using REPORT_PROMPT
+    - write report to out_dir/report_<YYYY-MM-DD>.md
+
+    Notes:
+    - Secrets/PII found in .gitignore files are downgraded to WARN (if you implemented that logic
+      in the scanning nodes and stored them into secrets_warnings / pii_warnings accordingly).
+    """
+
+    # ---- Helper accessors (avoid None surprises) ----
+    header_issues = getattr(state, "header_issues", {}) or {}
+
+    secrets_failures = getattr(state, "secrets_failures", {}) or {}
+    secrets_warnings = getattr(state, "secrets_warnings", {}) or {}
+
+    pii_failures = getattr(state, "pii_failures", {}) or {}
+    pii_warnings = getattr(state, "pii_warnings", {}) or {}
+
+    license_ok = getattr(state, "license_ok", True)
+    license_info = getattr(state, "license_info", {}) or {}
+
+    requirements_ok = getattr(state, "requirements_ok", True)
+    requirements_info = getattr(state, "requirements_info", {}) or {}
+    req_status = "OK" if requirements_ok else "MISSING"
 
     dep_failures = getattr(state, "dep_license_failures", []) or []
     dep_warnings = getattr(state, "dep_license_warnings", []) or []
 
-    # Secrets are dict relpath -> findings list
-    secrets_count_files = len(getattr(state, "secrets", {}) or {})
+    docs = getattr(state, "docs", {}) or {}
 
-    # ---- Determine outcome deterministically (PASS/WARN/FAIL) ----
+    # ---- Counts ----
+    hard_pii_count = sum(len(v) for v in pii_failures.values())
+    warn_pii_count = sum(len(v) for v in pii_warnings.values())
+
+    secrets_fail_files = len(secrets_failures)
+    secrets_warn_files = len(secrets_warnings)
+
+    # ---- Determine deterministic outcome ----
     fail_reasons: list[str] = []
     warn_reasons: list[str] = []
 
-    if secrets_count_files > 0:
-        fail_reasons.append("Secrets detected")
+    # FAIL conditions
+    if secrets_fail_files > 0:
+        fail_reasons.append("Secrets detected (non-ignored files)")
 
-    if hard_pii > 0:
-        fail_reasons.append("PII hard failures detected")
+    if hard_pii_count > 0:
+        fail_reasons.append("PII hard failures detected (non-ignored files)")
 
-    # repo license check
-    if not getattr(state, "license_ok", True):
+    if not license_ok:
         fail_reasons.append("Repository license check failed")
 
-    # dependency license failures
     if len(dep_failures) > 0:
         fail_reasons.append("Dependency license failures")
 
-    # warnings
-    if not req_ok:
-        warn_reasons.append("requirements.txt missing at repository root")
+    # WARN conditions (only if not FAIL)
+    if secrets_warn_files > 0:
+        warn_reasons.append("Secrets detected in .gitignore files (downgraded to WARN)")
+
+    if warn_pii_count > 0:
+        warn_reasons.append(
+            "PII warnings (includes downgraded findings from .gitignore files)"
+        )
+
+    if not requirements_ok:
+        warn_reasons.append(
+            "requirements.txt missing at repository root (dependency checks incomplete)"
+        )
+
     if len(dep_warnings) > 0:
         warn_reasons.append(
-            "Dependency license warnings (unknown/not installed/ambiguous)"
+            "Dependency license warnings (UNKNOWN/NOT_INSTALLED/ambiguous)"
         )
-    if warn_pii > 0:
-        warn_reasons.append("PII warnings (structured name/address)")
 
     if fail_reasons:
         overall = "FAIL"
@@ -490,46 +591,49 @@ async def node_finalize(state: AgentState, *, config: RunnableConfig) -> AgentSt
     else:
         overall = "PASS"
 
-    # ---- Summary ----
+    # ---- Summary string (human readable) ----
     state.summary = (
         f"Outcome: {overall}\n"
         f"Processed {len(state.file_list)} files.\n"
-        f"Repository license: {'OK' if getattr(state, 'license_ok', True) else 'FAILED'}\n"
-        f"Dependency licenses: failures={len(dep_failures)}, warnings={len(dep_warnings)}\n"
+        f"Repository license: {'OK' if license_ok else 'FAILED'}\n"
         f"requirements.txt at root: {req_status}\n"
-        f"Header issues: {len(getattr(state, 'header_issues', {}) or {})} files.\n"
-        f"Secret findings: {secrets_count_files} files.\n"
-        f"PII hard failures: {hard_pii} findings in {len(getattr(state, 'pii_failures', {}) or {})} files.\n"
-        f"PII warnings: {warn_pii} findings in {len(getattr(state, 'pii_warnings', {}) or {})} files.\n"
-        f"Docs generated: {len(getattr(state, 'docs', {}) or {})} files.\n"
+        f"Dependency licenses: failures={len(dep_failures)}, warnings={len(dep_warnings)}\n"
+        f"Header issues: {len(header_issues)} files.\n"
+        f"Secrets: FAIL files={secrets_fail_files}, WARN files={secrets_warn_files}\n"
+        f"PII hard failures: {hard_pii_count} findings in {len(pii_failures)} files.\n"
+        f"PII warnings: {warn_pii_count} findings in {len(pii_warnings)} files.\n"
+        f"Docs generated: {len(docs)} files.\n"
         f"Output dir: {state.out_dir}\n"
     )
     if fail_reasons:
         state.summary += "Fail reasons: " + "; ".join(fail_reasons) + "\n"
-    if (not fail_reasons) and warn_reasons:
+    elif warn_reasons:
         state.summary += "Warn reasons: " + "; ".join(warn_reasons) + "\n"
 
-    # ---- Generate markdown report via LLM ----
+    # ---- Generate report via LLM ----
     model_id = get_config_value(config, "model_id")
     llm = get_llm(model_id=model_id)
 
     now_iso = datetime.now(timezone.utc).isoformat(timespec="minutes")
 
+    # For REPORT_PROMPT: keep backward compatibility with your existing placeholder name `secret_issues`
+    # by passing only the FAIL set there (policy-critical), and optionally include warnings in requirements_check.
     prompt = REPORT_PROMPT.format(
         now_datetime=now_iso,
         num_files=len(state.file_list),
-        header_issues=getattr(state, "header_issues", {}) or {},
-        secret_issues=getattr(state, "secrets", {}) or {},
-        license_check=getattr(state, "license_info", {}) or {},
+        header_issues=header_issues,
+        secret_issues=secrets_failures,  # only non-ignored failures
+        license_check=license_info,
         dep_license_failures=dep_failures,
         dep_license_warnings=dep_warnings,
-        pii_hard_failures=getattr(state, "pii_failures", {}) or {},
-        pii_warnings=getattr(state, "pii_warnings", {}) or {},
-        requirements_check=getattr(state, "requirements_info", {}) or {},
-        # Optional: if you add these placeholders to the prompt, you can pass them too:
-        # overall_outcome=overall,
-        # fail_reasons=fail_reasons,
-        # warn_reasons=warn_reasons,
+        pii_hard_failures=pii_failures,
+        pii_warnings=pii_warnings,
+        requirements_check={
+            **requirements_info,
+            # include extra detail for the report without changing your state model
+            "requirements_status": req_status,
+            "secrets_warnings_ignored_files": secrets_warnings,
+        },
     )
 
     text, _ = await call_llm_normalized(llm, prompt)
@@ -557,6 +661,7 @@ def build_graph():
     g.add_node("discover_files", node_discover_files)
 
     # sequentially here we process all the files discovered
+    g.add_node("load_gitignore", node_load_gitignore)
     g.add_node("check_headers", node_check_headers)
     g.add_node("scan_secrets", node_scan_secrets)
     g.add_node("check_license", node_check_license)
@@ -568,7 +673,8 @@ def build_graph():
     g.add_node("finalize", node_finalize)
 
     g.set_entry_point("discover_files")
-    g.add_edge("discover_files", "check_requirements")
+    g.add_edge("discover_files", "load_gitignore")
+    g.add_edge("load_gitignore", "check_requirements")
     g.add_edge("check_requirements", "check_license")
     g.add_edge("check_license", "check_dep_licenses")
     g.add_edge("check_dep_licenses", "check_headers")
