@@ -1,7 +1,7 @@
 """
 File name: graph_agent.py
 Author: Luigi Saetta
-Date last modified: 2025-12-14
+Date last modified: 2026-01-12
 Python Version: 3.11
 
 License:

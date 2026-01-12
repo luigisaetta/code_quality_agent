@@ -1,7 +1,7 @@
 """
 File name: docgen.py
 Author: Luigi Saetta
-Date last modified: 2025-12-16
+Date last modified: 2026-01-12
 Python Version: 3.11
 
 Description:

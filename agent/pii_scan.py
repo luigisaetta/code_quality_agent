@@ -7,13 +7,14 @@ Python Version: 3.11
 License:
     MIT
 
-Deterministic PII scanner.
+Description:
+    Deterministic PII scanner.
 
-Policy:
-- HARD FAIL: direct identifiers (email, phone, IBAN, credit card, IT tax id)
-- WARN: structured names/addresses (heuristic, conservative)
+    Policy:
+    - HARD FAIL: direct identifiers (email, phone, IBAN, credit card, IT tax id)
+    - WARN: structured names/addresses (heuristic, conservative)
 
-All excerpts are masked to avoid leaking PII in logs/artifacts.
+    All excerpts are masked to avoid leaking PII in logs/artifacts.
 """
 
 from __future__ import annotations

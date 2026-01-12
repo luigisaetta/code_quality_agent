@@ -1,18 +1,23 @@
 """
-dep_license_check.py
+File name: dep_license_check.py
+Author: L. Saetta
+Date last modified: 2026-01-12
+Python Version: 3.11
+License: MIT
 
-Checks licenses for dependencies listed in requirements.txt (direct deps).
+Description:
+    Checks licenses for dependencies listed in requirements.txt (direct deps).
 
-Primary source:
-- Installed package metadata (importlib.metadata)
+    Primary source:
+    - Installed package metadata (importlib.metadata)
 
-Fallback source (when installed metadata cannot determine license):
-- PyPI JSON API for the *installed version* (best-effort)
+    Fallback source (when installed metadata cannot determine license):
+    - PyPI JSON API for the *installed version* (best-effort)
 
-Limitations:
-- If dependencies are not installed in the environment running the agent, licenses will be NOT_INSTALLED.
-- Requirements parsing is intentionally conservative; complex pip options are ignored.
-- PyPI fallback requires network access and relies on PyPI metadata quality.
+    Limitations:
+    - If dependencies are not installed in the environment running the agent, licenses will be NOT_INSTALLED.
+    - Requirements parsing is intentionally conservative; complex pip options are ignored.
+    - PyPI fallback requires network access and relies on PyPI metadata quality.
 """
 
 from __future__ import annotations
@@ -25,6 +30,10 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any, Iterable
 
+from agent.utils import get_console_logger
+
+
+logger = get_console_logger()
 
 # ---- Data models ----
 
@@ -117,6 +126,7 @@ def _normalize_license_string(s: str) -> str:
         return "UNKNOWN"
 
     # Common normalizations
+    # for now I don't want to add GPL
     mapping = {
         # Apache
         "APACHE 2.0": "Apache-2.0",
@@ -292,6 +302,8 @@ def _get_license_from_pypi(
     else:
         url = f"https://pypi.org/pypi/{pypi_name}/json"
 
+    logger.info("   Fetching license info from PyPI for %s", dist_name)
+
     req = urllib.request.Request(
         url,
         headers={
@@ -313,22 +325,50 @@ def _get_license_from_pypi(
     return lic
 
 
-def get_installed_dist_license(dist_name: str) -> DepLicenseInfo:
+def extract_pinned_version(requirement: str) -> str | None:
+    """
+    Extracts the pinned version from a requirement line if it uses '=='.
+    Returns None if no pinned version is found.
+    """
+    base = requirement.split(";", 1)[0].strip()
+    m = re.search(r"==\s*([A-Za-z0-9][A-Za-z0-9.\-+]*)", base)
+    return m.group(1) if m else None
+
+
+def get_installed_dist_license(
+    dist_name: str, *, version_hint: str | None = None
+) -> DepLicenseInfo:
     """
     dist_name is a distribution name (best-effort).
 
     Returns DepLicenseInfo with license info from installed metadata.
-    If not installed, license is NOT_INSTALLED.
-    If license cannot be determined from local metadata, tries PyPI fallback for the installed version.
+    If not installed, tries PyPI fallback (prefer version_hint if provided).
+    If license cannot be determined, license is UNKNOWN.
     """
     try:
         md = metadata.metadata(dist_name)
         ver = metadata.version(dist_name)
+        installed = True
     except metadata.PackageNotFoundError:
+        md = None
+        ver = None
+        installed = False
+
+    # CHANGE: If not installed, try PyPI fallback instead of returning immediately
+    if not installed:
+        lic_web = _get_license_from_pypi(dist_name, version_hint)
+        if lic_web:
+            return DepLicenseInfo(
+                requirement=dist_name,
+                distribution=dist_name,
+                version=version_hint,
+                license=lic_web,
+                source="pypi_json",
+            )
         return DepLicenseInfo(
             requirement=dist_name,
             distribution=dist_name,
-            version=None,
+            version=version_hint,
             license="NOT_INSTALLED",
             source="not_installed",
         )
@@ -405,7 +445,8 @@ def check_dependency_licenses(
             )
             continue
 
-        info = get_installed_dist_license(dist)
+        pinned = extract_pinned_version(req)
+        info = get_installed_dist_license(dist, version_hint=pinned)
 
         # Keep original requirement for traceability
         info = DepLicenseInfo(

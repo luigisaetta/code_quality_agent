@@ -15,7 +15,7 @@ Usage:
 License:
     This code is released under the MIT License.
 
-Notes:
+Description:
     This is a part of a demo showing how to implement an advanced
     RAG solution as a LangGraph agent.
 

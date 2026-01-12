@@ -1,5 +1,12 @@
 """
-Entry point to run the agent from command line.
+File name: run_agent.py
+Author: L. Saetta
+Date last modified: 2026-01-12
+Python Version: 3.11
+License: MIT
+
+Description:
+    Entry point to run the agent from command line.
 """
 
 import argparse

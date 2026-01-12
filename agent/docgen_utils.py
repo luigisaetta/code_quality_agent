@@ -1,8 +1,13 @@
 """
-Text generation utilities
+File name: docgen_utils.py
+Author: L. Saetta
+Date last modified: 2026-01-12
+Python Version: 3.11
+License: MIT
 
-License:
-    MIT
+Description:
+    Text generation utilities
+
 """
 
 import asyncio

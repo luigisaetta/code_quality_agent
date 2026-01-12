@@ -7,8 +7,9 @@ Python Version: 3.11
 License:
     MIT
 
-Checks that a license file is present and (best-effort) identifies its type,
-then validates it against an allow-list.
+Description:
+    Checks that a license file is present and (best-effort) identifies its type,
+    then validates it against an allow-list.
 """
 
 from __future__ import annotations

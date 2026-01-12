@@ -1,10 +1,15 @@
 """
-Prompt for documentation generation of Python files.
+File name: docgen_prompt.py
+Author: L. Saetta
+Date last modified: 2026-01-12
+Python Version: 3.11
+License: MIT
 
-You can customize the documentation style and content by modifying the DOC_PROMPT variable below.
+Description:
+  Prompt for documentation generation of Python files.
 
-License:
-    MIT
+  You can customize the documentation style and content by modifying the DOC_PROMPT variable below.
+
 """
 
 DOC_PROMPT = """

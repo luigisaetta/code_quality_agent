@@ -1,8 +1,13 @@
 """
-header_fix.py
+File name: header_fix.py
+Author: L. Saetta
+Date last modified: 2026-01-12
+Python Version: 3.11
+License: MIT
 
-Generate compliant header docstrings for files that fail header checks.
-Outputs patch text (unified diff) to apply externally (repo is read-only).
+Description:
+    Generate compliant header docstrings for files that fail header checks.
+    Outputs patch text (unified diff) to apply externally (repo is read-only).
 """
 
 from __future__ import annotations

@@ -1,8 +1,13 @@
 """
-requirements_check.py
+File name: requirements_check.py
+Author: L.  Saetta
+Date last modified: 2026-01-12
+Python Version: 3.11
+License: MIT
 
-Checks whether requirements.txt exists at repo root.
-Optionally captures a short preview for reporting (no secrets/PII).
+Description:
+    Checks whether requirements.txt exists at repo root.
+    Optionally captures a short preview for reporting (no secrets/PII).
 """
 
 from __future__ import annotations
