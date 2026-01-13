@@ -34,7 +34,6 @@ def check_requirements_at_root(*, repo_root: Path, fs) -> RequirementsCheckResul
       ok=False otherwise (strong warning).
     """
     req_name = "requirements.txt"
-    req_abs = (repo_root / req_name).resolve()
 
     # use sandbox read to ensure we're under root
     try:

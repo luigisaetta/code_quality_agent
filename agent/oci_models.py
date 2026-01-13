@@ -1,7 +1,7 @@
 """
 File name: oci_models.py
 Author: Luigi Saetta
-Date last modified: 2025-06-30
+Date last modified: 2026-01-13
 Python Version: 3.11
 
 Description:
@@ -27,7 +27,7 @@ Warnings:
 """
 
 # switched to the new OCI langchain integration
-from langchain_oci import ChatOCIGenAI, ChatOCIOpenAI
+from langchain_oci import ChatOCIGenAI
 
 from agent.utils import get_console_logger
 from agent.config import (

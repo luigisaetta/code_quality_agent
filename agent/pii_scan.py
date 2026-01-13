@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Iterable
 
 
 # ----------------------------
@@ -144,8 +143,8 @@ def _mask_excerpt(kind: str, excerpt: str) -> str:
 
 
 def _looks_fake(line: str) -> bool:
-    l = line.lower()
-    return any(h in l for h in _FAKE_HINTS)
+    line = line.lower()
+    return any(h in line for h in _FAKE_HINTS)
 
 
 def _luhn_ok(number: str) -> bool:
