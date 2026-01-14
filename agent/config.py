@@ -63,9 +63,9 @@ EXCLUDED_PATHS = [
 ACCEPTED_LICENSE_TYPES = [
     "MIT",
     "Apache-2.0",
+    "UPL-1.0",
     "BSD-3-Clause",
     "BSD-2-Clause",
-    "UPL-1.0",
 ]
 
 # set this flag to True if you want to create local docs in md format.
