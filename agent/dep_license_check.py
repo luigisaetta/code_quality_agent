@@ -129,6 +129,7 @@ def _normalize_license_string(s: str) -> str:
     # for now I don't want to add GPL
     mapping = {
         # Apache
+        "APACHE": "Apache-2.0",
         "APACHE 2.0": "Apache-2.0",
         "APACHE-2.0": "Apache-2.0",
         "APACHE SOFTWARE LICENSE": "Apache-2.0",
@@ -136,7 +137,15 @@ def _normalize_license_string(s: str) -> str:
         "MIT": "MIT",
         "MIT LICENSE": "MIT",
         # BSD
-        "BSD": "BSD",  # ambiguous; you may choose to treat as warn
+        "BSD": "BSD",
+        # BSD variants commonly seen in metadata
+        "MODIFIED BSD LICENSE": "BSD",
+        "NEW BSD LICENSE": "BSD-3-Clause",
+        "REVISED BSD LICENSE": "BSD-3-Clause",
+        "BSD-3-CLAUSE": "BSD-3-Clause",
+        "BSD 3-CLAUSE": "BSD-3-Clause",
+        "BSD-2-CLAUSE": "BSD-2-Clause",
+        "BSD 2-CLAUSE": "BSD-2-Clause",
         # ISC
         "ISC": "ISC",
         # MPL
@@ -148,14 +157,6 @@ def _normalize_license_string(s: str) -> str:
         "UPL 1.0": "UPL-1.0",
         "UNIVERSAL PERMISSIVE LICENSE 1.0": "UPL-1.0",
         "UNIVERSAL PERMISSIVE LICENSE (UPL) 1.0": "UPL-1.0",
-        # BSD variants commonly seen in metadata
-        "MODIFIED BSD LICENSE": "BSD",
-        "NEW BSD LICENSE": "BSD-3-Clause",  # optional, if you want to be more specific
-        "REVISED BSD LICENSE": "BSD-3-Clause",  # optional
-        "BSD-3-CLAUSE": "BSD-3-Clause",
-        "BSD 3-CLAUSE": "BSD-3-Clause",
-        "BSD-2-CLAUSE": "BSD-2-Clause",
-        "BSD 2-CLAUSE": "BSD-2-Clause",
     }
 
     if "MODIFIED BSD" in u:
