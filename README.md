@@ -88,8 +88,6 @@ For now, tests have been done using:
 │   ├── config.py               # Global agent configuration
 │   ├── config_private.py       # Local/private settings (not committed)
 │   ├── config_private_template.py
-│   │
-│   └── license_overrides.py    # ✅ NEW: dependency license overrides (Option B)
 │
 ├── out/                        # Generated artifacts (reports, docs, headers)
 │   ├── header_fixes/           # Generated compliant headers (manual cut&paste)
