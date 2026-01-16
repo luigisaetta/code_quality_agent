@@ -69,20 +69,37 @@ For now, tests have been done using:
 ```text
 .
 ├── agent/
-│   ├── graph_agent.py        # LangGraph pipeline (discover → check → scan → docgen → report)
-│   ├── fs_ro.py              # Read-only sandboxed filesystem access
-│   ├── header_rules.py       # Header policy checker
-│   ├── secrets_scan.py       # Heuristic secrets scanner
-│   ├── docgen.py             # Per-file documentation generation
-│   ├── docgen_prompt.py      # Prompts for doc generation + final report
-│   ├── docgen_utils.py       # LLM invocation + output normalization
-│   ├── oci_models.py         # OCI GenAI / OCI OpenAI LangChain adapters
-│   └── utils.py              # Logging helpers, etc.
-├── out/                      # Default output folder (generated artifacts)
-├── run_agent.py              # CLI entry point
-├── run_agent.sh              # Convenience runner
-├── requirements.txt
-└── LICENSE
+│   ├── graph_agent.py          # LangGraph pipeline
+│   ├── fs_ro.py                # Read-only sandboxed filesystem access
+│   ├── header_rules.py         # Header policy checker
+│   ├── header_fix.py           # Header auto-generation (cut&paste snippets)
+│   ├── secrets_scan.py         # Heuristic secrets scanner
+│   ├── pii_scan.py             # PII detection (hard fail / warn)
+│   ├── docgen.py               # Per-file documentation generation
+│   ├── docgen_prompt.py        # Prompts for doc generation + final report
+│   ├── docgen_utils.py         # LLM invocation + output normalization
+│   ├── oci_models.py           # OCI GenAI / OCI OpenAI adapters
+│   ├── license_check.py        # Project LICENSE file checker
+│   ├── requirements_check.py   # Presence + sanity of requirements.txt
+│   ├── dep_license_check.py    # Dependency license resolution (PyPI + local)
+│   ├── gitignore_utils.py      # .gitignore helpers
+│   ├── utils.py                # Logging helpers, shared utilities
+│   │
+│   ├── config.py               # Global agent configuration
+│   ├── config_private.py       # Local/private settings (not committed)
+│   ├── config_private_template.py
+│   │
+│   └── license_overrides.py    # ✅ NEW: dependency license overrides (Option B)
+│
+├── out/                        # Generated artifacts (reports, docs, headers)
+│   ├── header_fixes/           # Generated compliant headers (manual cut&paste)
+│   └── reports/                # Final compliance reports
+│
+├── requirements.txt            # Project dependencies
+├── LICENSE                     # Project license
+├── run_agent.py                # CLI entry point
+├── run_agent.sh                # Convenience runner
+└── README.md                   # Project overview (recommended)
 ```
 
 ## Setup
